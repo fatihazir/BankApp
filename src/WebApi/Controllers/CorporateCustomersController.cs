@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using Application.Features.CorporateCustomers.Commands.Create;
 using Application.Features.CorporateCustomers.Commands.Delete;
 using Application.Features.CorporateCustomers.Commands.Update;
@@ -12,7 +13,8 @@ namespace WebApi.Controllers;
 
 [ApiController]
 [Authorize]
-[Route("api/corporate-customers")]
+[ApiVersion("0")]
+[Route("api/v{version:apiVersion}/corporate-customers")]
 public class CorporateCustomersController : ControllerBase
 {
     private readonly IMediator _mediator;

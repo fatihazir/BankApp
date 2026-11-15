@@ -14,7 +14,7 @@ namespace WebApi.IntegrationTests.Controllers;
 [Collection(DatabaseCollection.Name)]
 public class IndividualCustomersControllerTests(SqlServerFixture database) : ApiTestBase(database)
 {
-    private const string BaseUrl = "/api/individual-customers";
+    private const string BaseUrl = "/api/v0/individual-customers";
 
     private static CreateIndividualCustomerCommand NewCustomer(string nationalId = "10000000146") => new()
     {
@@ -188,7 +188,7 @@ public class IndividualCustomersControllerTests(SqlServerFixture database) : Api
     [Fact]
     public async Task OpenApiDocument_ContainsPrefilledExamples_ForCreateAndUpdate()
     {
-        var doc = await ReadJsonAsync(await Client.GetAsync("/openapi/v1.json", Ct));
+        var doc = await ReadJsonAsync(await Client.GetAsync("/openapi/v0.json", Ct));
 
         JsonElement Example(string path, string verb) => doc.GetProperty("paths").GetProperty(path).GetProperty(verb)
             .GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("example");

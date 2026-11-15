@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using Application.Features.Users.Commands.Ban;
 using Application.Features.Users.Commands.CreateStaff;
 using Application.Features.Users.Commands.Unban;
@@ -12,7 +13,8 @@ namespace WebApi.Controllers;
 /// <summary>User accounts. Bank staff only.</summary>
 [ApiController]
 [Authorize]
-[Route("api/users")]
+[ApiVersion("0")]
+[Route("api/v{version:apiVersion}/users")]
 public class UsersController : ControllerBase
 {
     private readonly IMediator _mediator;

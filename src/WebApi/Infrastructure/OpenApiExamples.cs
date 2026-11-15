@@ -31,9 +31,9 @@ public static class OpenApiExamples
         options.AddDocumentTransformer((document, _, _) =>
         {
             document.Info.Title = "BankApp Loan API";
-            document.Info.Version = "v1";
+            document.Info.Version = "v0";
 
-            // Adds the "Authorize" button to Swagger UI: paste the accessToken returned by POST /api/auth/login.
+            // Adds the "Authorize" button to Swagger UI: paste the accessToken returned by POST /api/v0/auth/login.
             document.Components ??= new OpenApiComponents();
             document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
             document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
@@ -41,7 +41,7 @@ public static class OpenApiExamples
                 Type = SecuritySchemeType.Http,
                 Scheme = "bearer",
                 BearerFormat = "JWT",
-                Description = "Paste the accessToken from POST /api/auth/login."
+                Description = "Paste the accessToken from POST /api/v0/auth/login."
             };
             return Task.CompletedTask;
         });
@@ -183,7 +183,7 @@ public static class OpenApiExamples
     /// <summary>
     /// The sub type id is a seeded one (Personal Loan). The customer id is a placeholder: replace it with the id
     /// returned when a customer was created. Individual customers can use Personal, Mortgage and Auto loans,
-    /// corporate customers Working Capital, Investment and Commercial loans (see GET /api/loan-types).
+    /// corporate customers Working Capital, Investment and Commercial loans (see GET /api/v0/loan-types).
     /// </summary>
     private static JsonObject LoanApplicationExample() => new()
     {

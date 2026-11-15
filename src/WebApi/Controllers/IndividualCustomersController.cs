@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using Application.Features.IndividualCustomers.Commands.Create;
 using Application.Features.IndividualCustomers.Commands.Delete;
 using Application.Features.IndividualCustomers.Commands.Update;
@@ -12,7 +13,8 @@ namespace WebApi.Controllers;
 
 [ApiController]
 [Authorize]
-[Route("api/individual-customers")]
+[ApiVersion("0")]
+[Route("api/v{version:apiVersion}/individual-customers")]
 public class IndividualCustomersController : ControllerBase
 {
     private readonly IMediator _mediator;

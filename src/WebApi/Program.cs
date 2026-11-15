@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Asp.Versioning;
 using Application;
 using BankingSystemCore.Security;
 using BankingSystemCore.CrossCuttingConcerns.Exceptions.Middlewares;
@@ -36,7 +37,22 @@ builder.Services
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
-builder.Services.AddOpenApi(options => options.AddRequestExamples());
+// The current API is version 0 and lives under /api/v0/... The version is always part of the URL.
+builder.Services
+    .AddApiVersioning(options =>
+    {
+        options.DefaultApiVersion = new ApiVersion(0, 0);
+        options.AssumeDefaultVersionWhenUnspecified = false;
+        options.ReportApiVersions = true; // "api-supported-versions" response header
+        options.ApiVersionReader = new UrlSegmentApiVersionReader();
+    })
+    .AddMvc()
+    .AddApiExplorer(options =>
+    {
+        options.GroupNameFormat = "'v'VVV"; // version 0 -> group "v0" -> document /openapi/v0.json
+        options.SubstituteApiVersionInUrl = true;
+    })
+    .AddOpenApi(options => options.Document.AddRequestExamples()); // one OpenAPI document per API version
 
 var app = builder.Build();
 
@@ -44,10 +60,10 @@ app.UseCustomExceptionMiddleware();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().WithDocumentPerVersion(); // /openapi/v0.json
     app.UseSwaggerUI(options =>
     {
-        options.SwaggerEndpoint("/openapi/v1.json", "BankApp Loan API v1");
+        options.SwaggerEndpoint("/openapi/v0.json", "BankApp Loan API v0");
         options.RoutePrefix = "swagger";
     });
 

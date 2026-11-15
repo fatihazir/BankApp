@@ -113,7 +113,7 @@ public abstract class ApiTestBase : IAsyncLifetime
     /// <summary>Logs in over HTTP and returns the access token.</summary>
     protected async Task<string> LoginAsync(string email, string password)
     {
-        var response = await AnonymousClient.PostAsJsonAsync("/api/auth/login", new { email, password }, Json, Ct);
+        var response = await AnonymousClient.PostAsJsonAsync("/api/v0/auth/login", new { email, password }, Json, Ct);
         response.EnsureSuccessStatusCode();
         return (await ReadJsonAsync(response)).GetProperty("accessToken").GetString()!;
     }

@@ -18,11 +18,11 @@ namespace WebApi.IntegrationTests.Controllers;
 [Collection(DatabaseCollection.Name)]
 public class LoanApplicationsControllerTests(SqlServerFixture database) : ApiTestBase(database)
 {
-    private const string Url = "/api/loan-applications";
+    private const string Url = "/api/v0/loan-applications";
 
     private async Task<Guid> NewIndividualAsync(string nationalId = "10000000146", string firstName = "Fatih")
     {
-        var response = await PostAsync("/api/individual-customers", new CreateIndividualCustomerCommand
+        var response = await PostAsync("/api/v0/individual-customers", new CreateIndividualCustomerCommand
         {
             Email = $"{nationalId}@bank.test", Password = CustomerPassword, PhoneNumber = "5551112233", Address = "Street", City = "Istanbul", Country = "Turkey",
             FirstName = firstName, LastName = "Yilmaz", NationalId = nationalId, DateOfBirth = new DateOnly(1990, 1, 1),
@@ -34,7 +34,7 @@ public class LoanApplicationsControllerTests(SqlServerFixture database) : ApiTes
 
     private async Task<Guid> NewCorporateAsync()
     {
-        var response = await PostAsync("/api/corporate-customers", new CreateCorporateCustomerCommand
+        var response = await PostAsync("/api/v0/corporate-customers", new CreateCorporateCustomerCommand
         {
             Email = "company@bank.test", Password = CustomerPassword, PhoneNumber = "2125551234", Address = "Plaza", City = "Istanbul", Country = "Turkey",
             CompanyName = "Acme", TaxNumber = "1234567890", TaxOffice = "Kadikoy", FoundationDate = new DateOnly(2010, 1, 1),
@@ -314,7 +314,7 @@ public class LoanApplicationsControllerTests(SqlServerFixture database) : ApiTes
     [Fact]
     public async Task SwaggerExamples_ForLoanApplications_AreValidRequests_OnceTheCustomerIdIsFilledIn()
     {
-        var doc = await ReadJsonAsync(await Client.GetAsync("/openapi/v1.json", Ct));
+        var doc = await ReadJsonAsync(await Client.GetAsync("/openapi/v0.json", Ct));
         JsonElement Example(string path) => doc.GetProperty("paths").GetProperty(path).GetProperty("post")
             .GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("example");
 

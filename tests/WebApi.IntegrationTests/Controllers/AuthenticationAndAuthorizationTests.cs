@@ -22,7 +22,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
     private async Task<Person> NewPersonAsync(int seed, string firstName)
     {
         string nationalId = TestData.NationalId(seed);
-        var response = await PostAsync("/api/individual-customers", new CreateIndividualCustomerCommand
+        var response = await PostAsync("/api/v0/individual-customers", new CreateIndividualCustomerCommand
         {
             Email = $"{firstName}@x.com", Password = CustomerPassword, PhoneNumber = "5551112233", Address = "Street", City = "Istanbul", Country = "Turkey",
             FirstName = firstName, LastName = "Test", NationalId = nationalId, DateOfBirth = new DateOnly(1990, 1, 1),
@@ -37,7 +37,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
 
     private async Task<Guid> ApplyAsync(HttpClient client, Guid customerId, Guid? subTypeId = null)
     {
-        var response = await client.PostAsJsonAsync("/api/loan-applications", new
+        var response = await client.PostAsJsonAsync("/api/v0/loan-applications", new
         {
             customerId, loanSubTypeId = subTypeId ?? LoanSeedData.PersonalLoanId, requestedAmount = 100_000, termInMonths = 24
         }, Json, Ct);
@@ -59,7 +59,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
     [Fact]
     public async Task Login_ReturnsAToken_ThatWorksOnMe()
     {
-        var login = await AnonymousClient.PostAsJsonAsync("/api/auth/login", new { email = StaffEmail, password = StaffPassword }, Json, Ct);
+        var login = await AnonymousClient.PostAsJsonAsync("/api/v0/auth/login", new { email = StaffEmail, password = StaffPassword }, Json, Ct);
 
         login.StatusCode.ShouldBe(HttpStatusCode.OK);
         var body = await ReadJsonAsync(login);
@@ -69,7 +69,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
         body.GetRawText().ShouldNotContain("PBKDF2");
 
         using var client = ClientFor(body.GetProperty("accessToken").GetString()!);
-        var me = await ReadJsonAsync(await client.GetAsync("/api/auth/me", Ct));
+        var me = await ReadJsonAsync(await client.GetAsync("/api/v0/auth/me", Ct));
         me.GetProperty("email").GetString().ShouldBe(StaffEmail);
         me.GetProperty("roles")[0].GetString().ShouldBe("BankStaff");
         me.GetProperty("emailVerified").GetBoolean().ShouldBeTrue(); // staff accounts are trusted
@@ -78,8 +78,8 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
     [Fact]
     public async Task Login_WithAWrongPasswordOrUnknownEmail_Returns401_WithTheSameMessage()
     {
-        var wrong = await AnonymousClient.PostAsJsonAsync("/api/auth/login", new { email = StaffEmail, password = "Wrong-Password-1" }, Json, Ct);
-        var unknown = await AnonymousClient.PostAsJsonAsync("/api/auth/login", new { email = "nobody@bank.test", password = "Wrong-Password-1" }, Json, Ct);
+        var wrong = await AnonymousClient.PostAsJsonAsync("/api/v0/auth/login", new { email = StaffEmail, password = "Wrong-Password-1" }, Json, Ct);
+        var unknown = await AnonymousClient.PostAsJsonAsync("/api/v0/auth/login", new { email = "nobody@bank.test", password = "Wrong-Password-1" }, Json, Ct);
 
         await AssertProblem(wrong, HttpStatusCode.Unauthorized, "urn:problem:authentication");
         await AssertProblem(unknown, HttpStatusCode.Unauthorized, "urn:problem:authentication");
@@ -90,7 +90,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
     [Fact]
     public async Task Login_WithBadInput_Returns400_Validation()
     {
-        var response = await AnonymousClient.PostAsJsonAsync("/api/auth/login", new { email = "not-an-email", password = "" }, Json, Ct);
+        var response = await AnonymousClient.PostAsJsonAsync("/api/v0/auth/login", new { email = "not-an-email", password = "" }, Json, Ct);
 
         await AssertProblem(response, HttpStatusCode.BadRequest, "urn:problem:validation");
     }
@@ -99,10 +99,10 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
     public async Task Login_LocksTheAccountAfterFiveWrongPasswords_EvenForTheRightPassword()
     {
         for (int i = 0; i < 5; i++)
-            (await AnonymousClient.PostAsJsonAsync("/api/auth/login", new { email = StaffEmail, password = "Wrong-Password-1" }, Json, Ct))
+            (await AnonymousClient.PostAsJsonAsync("/api/v0/auth/login", new { email = StaffEmail, password = "Wrong-Password-1" }, Json, Ct))
                 .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
-        var locked = await AnonymousClient.PostAsJsonAsync("/api/auth/login", new { email = StaffEmail, password = StaffPassword }, Json, Ct);
+        var locked = await AnonymousClient.PostAsJsonAsync("/api/v0/auth/login", new { email = StaffEmail, password = StaffPassword }, Json, Ct);
 
         await AssertProblem(locked, HttpStatusCode.Unauthorized, "urn:problem:authentication");
         (await ReadJsonAsync(locked)).GetProperty("detail").GetString()!.ShouldContain("locked");
@@ -111,16 +111,16 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
     // ---- no token / bad token ----
 
     [Theory]
-    [InlineData("GET", "/api/individual-customers")]
-    [InlineData("GET", "/api/corporate-customers")]
-    [InlineData("POST", "/api/individual-customers")]
-    [InlineData("GET", "/api/loan-types")]
-    [InlineData("POST", "/api/loan-types")]
-    [InlineData("GET", "/api/loan-applications")]
-    [InlineData("POST", "/api/loan-applications")]
-    [InlineData("GET", "/api/loan-applications/calculate")]
-    [InlineData("POST", "/api/users/staff")]
-    [InlineData("GET", "/api/auth/me")]
+    [InlineData("GET", "/api/v0/individual-customers")]
+    [InlineData("GET", "/api/v0/corporate-customers")]
+    [InlineData("POST", "/api/v0/individual-customers")]
+    [InlineData("GET", "/api/v0/loan-types")]
+    [InlineData("POST", "/api/v0/loan-types")]
+    [InlineData("GET", "/api/v0/loan-applications")]
+    [InlineData("POST", "/api/v0/loan-applications")]
+    [InlineData("GET", "/api/v0/loan-applications/calculate")]
+    [InlineData("POST", "/api/v0/users/staff")]
+    [InlineData("GET", "/api/v0/auth/me")]
     public async Task EveryProtectedEndpoint_Returns401_WithoutAToken(string method, string url)
     {
         var request = new HttpRequestMessage(new HttpMethod(method), url);
@@ -138,11 +138,11 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
 
         foreach (var (method, url) in new[]
         {
-            ("GET", $"/api/individual-customers/{id}"), ("PUT", $"/api/individual-customers/{id}"), ("DELETE", $"/api/individual-customers/{id}"),
-            ("GET", $"/api/corporate-customers/{id}"), ("PUT", $"/api/corporate-customers/{id}"), ("DELETE", $"/api/corporate-customers/{id}"),
-            ("GET", $"/api/loan-applications/{id}"), ("POST", $"/api/loan-applications/{id}/approve"), ("POST", $"/api/loan-applications/{id}/reject"),
-            ("POST", $"/api/loan-applications/{id}/start-review"), ("POST", $"/api/loan-applications/{id}/cancel"),
-            ("POST", $"/api/loan-types/{id}/sub-types")
+            ("GET", $"/api/v0/individual-customers/{id}"), ("PUT", $"/api/v0/individual-customers/{id}"), ("DELETE", $"/api/v0/individual-customers/{id}"),
+            ("GET", $"/api/v0/corporate-customers/{id}"), ("PUT", $"/api/v0/corporate-customers/{id}"), ("DELETE", $"/api/v0/corporate-customers/{id}"),
+            ("GET", $"/api/v0/loan-applications/{id}"), ("POST", $"/api/v0/loan-applications/{id}/approve"), ("POST", $"/api/v0/loan-applications/{id}/reject"),
+            ("POST", $"/api/v0/loan-applications/{id}/start-review"), ("POST", $"/api/v0/loan-applications/{id}/cancel"),
+            ("POST", $"/api/v0/loan-types/{id}/sub-types")
         })
         {
             var request = new HttpRequestMessage(new HttpMethod(method), url);
@@ -154,9 +154,9 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
     [Fact]
     public async Task OnlyLoginRefreshAndVerification_AreOpenToAnonymousCallers()
     {
-        (await AnonymousClient.PostAsJsonAsync("/api/auth/login", new { email = "a@b.com", password = "x" }, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized); // reached the handler
-        (await AnonymousClient.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = "x" }, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);   // reached the handler
-        (await AnonymousClient.PostAsJsonAsync("/api/auth/verify-email", new { }, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);                 // reached validation
+        (await AnonymousClient.PostAsJsonAsync("/api/v0/auth/login", new { email = "a@b.com", password = "x" }, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized); // reached the handler
+        (await AnonymousClient.PostAsJsonAsync("/api/v0/auth/refresh", new { refreshToken = "x" }, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);   // reached the handler
+        (await AnonymousClient.PostAsJsonAsync("/api/v0/auth/verify-email", new { }, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);                 // reached validation
     }
 
     [Theory]
@@ -167,7 +167,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
     {
         using var client = ClientFor(token.Length == 0 ? "x" : token);
 
-        await AssertProblem(await client.GetAsync("/api/auth/me", Ct), HttpStatusCode.Unauthorized, "urn:problem:authentication");
+        await AssertProblem(await client.GetAsync("/api/v0/auth/me", Ct), HttpStatusCode.Unauthorized, "urn:problem:authentication");
     }
 
     [Fact]
@@ -179,7 +179,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
 
         using var client = ClientFor(string.Join('.', parts));
 
-        (await client.GetAsync("/api/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await client.GetAsync("/api/v0/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -192,7 +192,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
 
         using var client = ClientFor(foreign.Token);
 
-        (await client.GetAsync("/api/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await client.GetAsync("/api/v0/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -206,7 +206,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
 
         using var client = ClientFor(expired.Token);
 
-        await AssertProblem(await client.GetAsync("/api/individual-customers", Ct), HttpStatusCode.Unauthorized, "urn:problem:authentication");
+        await AssertProblem(await client.GetAsync("/api/v0/individual-customers", Ct), HttpStatusCode.Unauthorized, "urn:problem:authentication");
     }
 
     [Theory]
@@ -221,7 +221,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
 
         using var client = ClientFor(token.Token);
 
-        (await client.GetAsync("/api/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await client.GetAsync("/api/v0/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -232,7 +232,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
 
         using var client = ClientFor($"{header}.{payload}.");
 
-        (await client.GetAsync("/api/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await client.GetAsync("/api/v0/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     private sealed class FixedTime(DateTimeOffset now) : TimeProvider
@@ -250,10 +250,10 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
 
         foreach (var (method, url) in new[]
         {
-            ("GET", "/api/individual-customers"), ("GET", "/api/corporate-customers"), ("POST", "/api/individual-customers"),
-            ("POST", "/api/corporate-customers"), ("DELETE", $"/api/individual-customers/{fatih.Id}"),
-            ("POST", "/api/loan-types"), ("POST", $"/api/loan-types/{LoanSeedData.IndividualLoanTypeId}/sub-types"),
-            ("POST", "/api/users/staff"), ("POST", $"/api/loan-applications/{Guid.NewGuid()}/approve")
+            ("GET", "/api/v0/individual-customers"), ("GET", "/api/v0/corporate-customers"), ("POST", "/api/v0/individual-customers"),
+            ("POST", "/api/v0/corporate-customers"), ("DELETE", $"/api/v0/individual-customers/{fatih.Id}"),
+            ("POST", "/api/v0/loan-types"), ("POST", $"/api/v0/loan-types/{LoanSeedData.IndividualLoanTypeId}/sub-types"),
+            ("POST", "/api/v0/users/staff"), ("POST", $"/api/v0/loan-applications/{Guid.NewGuid()}/approve")
         })
         {
             var request = new HttpRequestMessage(new HttpMethod(method), url);
@@ -271,7 +271,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
         var fatih = await NewPersonAsync(1, "Fatih");
         using var customer = await LoginAsCustomerAsync(fatih);
 
-        await AssertProblem(await customer.GetAsync("/api/individual-customers", Ct), HttpStatusCode.Forbidden, "urn:problem:authorization");
+        await AssertProblem(await customer.GetAsync("/api/v0/individual-customers", Ct), HttpStatusCode.Forbidden, "urn:problem:authorization");
     }
 
     [Fact]
@@ -281,11 +281,11 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
         using var customer = await LoginAsCustomerAsync(fatih);
         Guid applicationId = await ApplyAsync(customer, fatih.Id);
 
-        (await customer.PostAsync($"/api/loan-applications/{applicationId}/start-review", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await customer.PostAsJsonAsync($"/api/loan-applications/{applicationId}/approve", new { approvedAmount = 1 }, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await customer.PostAsJsonAsync($"/api/loan-applications/{applicationId}/reject", new { reason = "x" }, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await customer.PostAsync($"/api/v0/loan-applications/{applicationId}/start-review", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await customer.PostAsJsonAsync($"/api/v0/loan-applications/{applicationId}/approve", new { approvedAmount = 1 }, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await customer.PostAsJsonAsync($"/api/v0/loan-applications/{applicationId}/reject", new { reason = "x" }, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
-        var stored = await ReadJsonAsync(await Client.GetAsync($"/api/loan-applications/{applicationId}", Ct));
+        var stored = await ReadJsonAsync(await Client.GetAsync($"/api/v0/loan-applications/{applicationId}", Ct));
         stored.GetProperty("status").GetString().ShouldBe("Submitted");
     }
 
@@ -295,8 +295,8 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
         var fatih = await NewPersonAsync(1, "Fatih");
         using var customer = await LoginAsCustomerAsync(fatih);
 
-        (await customer.GetAsync("/api/loan-types", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await customer.GetAsync($"/api/loan-applications/calculate?loanSubTypeId={LoanSeedData.PersonalLoanId}&amount=50000&termInMonths=12", Ct))
+        (await customer.GetAsync("/api/v0/loan-types", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await customer.GetAsync($"/api/v0/loan-applications/calculate?loanSubTypeId={LoanSeedData.PersonalLoanId}&amount=50000&termInMonths=12", Ct))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
@@ -309,12 +309,12 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
         var sevval = await NewPersonAsync(2, "Sevval");
         using var customer = await LoginAsCustomerAsync(fatih);
 
-        (await customer.GetAsync($"/api/individual-customers/{fatih.Id}", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await customer.GetAsync($"/api/v0/individual-customers/{fatih.Id}", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var other = await customer.GetAsync($"/api/individual-customers/{sevval.Id}", Ct);
+        var other = await customer.GetAsync($"/api/v0/individual-customers/{sevval.Id}", Ct);
         await AssertProblem(other, HttpStatusCode.NotFound, "urn:problem:not-found");
 
-        var missing = await customer.GetAsync($"/api/individual-customers/{Guid.NewGuid()}", Ct);
+        var missing = await customer.GetAsync($"/api/v0/individual-customers/{Guid.NewGuid()}", Ct);
         (await ReadJsonAsync(other)).GetProperty("detail").GetString()
             .ShouldBe((await ReadJsonAsync(missing)).GetProperty("detail").GetString()); // indistinguishable
 
@@ -323,8 +323,8 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
             email = "x@y.com", phoneNumber = "1", address = "a", city = "a", country = "a", isActive = true, firstName = "Hacked",
             lastName = "x", nationalId = sevval.NationalId, dateOfBirth = "1990-01-01", employmentStatus = "Employed", monthlyIncome = 1
         };
-        (await customer.PutAsJsonAsync($"/api/individual-customers/{sevval.Id}", update, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        (await ReadJsonAsync(await Client.GetAsync($"/api/individual-customers/{sevval.Id}", Ct))).GetProperty("firstName").GetString().ShouldBe("Sevval");
+        (await customer.PutAsJsonAsync($"/api/v0/individual-customers/{sevval.Id}", update, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await ReadJsonAsync(await Client.GetAsync($"/api/v0/individual-customers/{sevval.Id}", Ct))).GetProperty("firstName").GetString().ShouldBe("Sevval");
     }
 
     [Fact]
@@ -338,18 +338,18 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
         Guid fatihApplication = await ApplyAsync(fatihClient, fatih.Id);
         Guid sevvalApplication = await ApplyAsync(sevvalClient, sevval.Id);
 
-        var forOther = await fatihClient.PostAsJsonAsync("/api/loan-applications",
+        var forOther = await fatihClient.PostAsJsonAsync("/api/v0/loan-applications",
             new { customerId = sevval.Id, loanSubTypeId = LoanSeedData.AutoLoanId, requestedAmount = 100_000, termInMonths = 24 }, Json, Ct);
         await AssertProblem(forOther, HttpStatusCode.Forbidden, "urn:problem:authorization");
 
-        var list = await ReadJsonAsync(await fatihClient.GetAsync("/api/loan-applications?size=50", Ct));
+        var list = await ReadJsonAsync(await fatihClient.GetAsync("/api/v0/loan-applications?size=50", Ct));
         list.GetProperty("count").GetInt32().ShouldBe(1);
         list.GetProperty("items")[0].GetProperty("id").GetGuid().ShouldBe(fatihApplication);
 
-        (await fatihClient.GetAsync($"/api/loan-applications?customerId={sevval.Id}", Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await fatihClient.GetAsync($"/api/loan-applications/{sevvalApplication}", Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        (await fatihClient.PostAsync($"/api/loan-applications/{sevvalApplication}/cancel", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        (await fatihClient.PostAsync($"/api/loan-applications/{fatihApplication}/cancel", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await fatihClient.GetAsync($"/api/v0/loan-applications?customerId={sevval.Id}", Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await fatihClient.GetAsync($"/api/v0/loan-applications/{sevvalApplication}", Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await fatihClient.PostAsync($"/api/v0/loan-applications/{sevvalApplication}/cancel", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await fatihClient.PostAsync($"/api/v0/loan-applications/{fatihApplication}/cancel", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -362,13 +362,13 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
         Guid fatihApplication = await ApplyAsync(fatihClient, fatih.Id);
         await ApplyAsync(sevvalClient, sevval.Id);
 
-        var all = await ReadJsonAsync(await Client.GetAsync("/api/loan-applications?size=50", Ct));
+        var all = await ReadJsonAsync(await Client.GetAsync("/api/v0/loan-applications?size=50", Ct));
         all.GetProperty("count").GetInt32().ShouldBe(2);
 
-        (await Client.PostAsync($"/api/loan-applications/{fatihApplication}/start-review", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await Client.PostAsJsonAsync($"/api/loan-applications/{fatihApplication}/approve", new { approvedAmount = 90_000 }, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await Client.PostAsync($"/api/v0/loan-applications/{fatihApplication}/start-review", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await Client.PostAsJsonAsync($"/api/v0/loan-applications/{fatihApplication}/approve", new { approvedAmount = 90_000 }, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var seenByCustomer = await ReadJsonAsync(await fatihClient.GetAsync($"/api/loan-applications/{fatihApplication}", Ct));
+        var seenByCustomer = await ReadJsonAsync(await fatihClient.GetAsync($"/api/v0/loan-applications/{fatihApplication}", Ct));
         seenByCustomer.GetProperty("status").GetString().ShouldBe("Approved");
         seenByCustomer.GetProperty("approvedAmount").GetDecimal().ShouldBe(90_000m);
     }
@@ -379,9 +379,9 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
         var fatih = await NewPersonAsync(1, "Fatih");
         using var odd = ClientFor(await IssueTokenAsync("Customer"));
 
-        (await odd.GetAsync($"/api/individual-customers/{fatih.Id}", Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await odd.GetAsync($"/api/v0/individual-customers/{fatih.Id}", Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         // A customer-role token of a user who owns nothing sees nothing (the list is filtered to that user).
-        var applications = await ReadJsonAsync(await odd.GetAsync("/api/loan-applications", Ct));
+        var applications = await ReadJsonAsync(await odd.GetAsync("/api/v0/loan-applications", Ct));
         applications.GetProperty("count").GetInt32().ShouldBe(0);
     }
 
@@ -390,8 +390,8 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
     {
         using var client = ClientFor(await IssueTokenAsync("Admin"));
 
-        (await client.GetAsync("/api/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await client.GetAsync("/api/loan-applications", Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await client.GetAsync("/api/v0/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await client.GetAsync("/api/v0/loan-applications", Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
     // ---- a customer is created together with their login ----
@@ -405,18 +405,18 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
         string token = await LoginAsync(fatih.Email, CustomerPassword);
         using var customer = ClientFor(token);
 
-        var me = await ReadJsonAsync(await customer.GetAsync("/api/auth/me", Ct));
+        var me = await ReadJsonAsync(await customer.GetAsync("/api/v0/auth/me", Ct));
         me.GetProperty("customerId").GetGuid().ShouldBe(fatih.Id);
         me.GetProperty("userId").GetGuid().ShouldBe(fatih.Id); // the customer is the user
         me.GetProperty("customerName").GetString().ShouldBe("Fatih Test");
-        (await customer.GetAsync($"/api/individual-customers/{fatih.Id}", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await customer.GetAsync($"/api/individual-customers/{sevval.Id}", Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await customer.GetAsync($"/api/v0/individual-customers/{fatih.Id}", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await customer.GetAsync($"/api/v0/individual-customers/{sevval.Id}", Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
     public async Task CreatingACustomer_NeedsALoginName_AndAStrongPassword_AndTheRoleCannotBeChosen()
     {
-        var weak = await PostAsync("/api/individual-customers", new
+        var weak = await PostAsync("/api/v0/individual-customers", new
         {
             email = "x@bank.test", password = "weak", firstName = "A", lastName = "B", nationalId = TestData.NationalId(5),
             dateOfBirth = "1990-01-01", employmentStatus = "Employed", phoneNumber = "1", address = "a", city = "a", country = "a"
@@ -426,7 +426,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
             .Select(e => e.GetProperty("property").GetString()).ShouldContain("Password");
 
         // A "role" in the body is simply ignored: the new customer is a Customer, never staff.
-        var sneaky = await PostAsync("/api/individual-customers", new
+        var sneaky = await PostAsync("/api/v0/individual-customers", new
         {
             email = "sneaky@bank.test", password = CustomerPassword, role = "BankStaff", firstName = "A", lastName = "B",
             nationalId = TestData.NationalId(6), dateOfBirth = "1990-01-01", employmentStatus = "Employed",
@@ -434,16 +434,16 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
         });
         sneaky.StatusCode.ShouldBe(HttpStatusCode.Created);
         using var client = ClientFor(await LoginAsync("sneaky@bank.test", CustomerPassword));
-        (await ReadJsonAsync(await client.GetAsync("/api/auth/me", Ct))).GetProperty("roles")[0].GetString().ShouldBe("Customer");
-        (await client.GetAsync("/api/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await ReadJsonAsync(await client.GetAsync("/api/v0/auth/me", Ct))).GetProperty("roles")[0].GetString().ShouldBe("Customer");
+        (await client.GetAsync("/api/v0/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
     [Fact]
     public async Task TheLoginName_MustBeFreeAmongAllUsers()
     {
-        await PostAsync("/api/users/staff", new { email = "taken@bank.test", password = "Second-Passw0rd-1" });
+        await PostAsync("/api/v0/users/staff", new { email = "taken@bank.test", password = "Second-Passw0rd-1" });
 
-        var response = await PostAsync("/api/individual-customers", new
+        var response = await PostAsync("/api/v0/individual-customers", new
         {
             email = "TAKEN@bank.test", password = CustomerPassword, firstName = "A", lastName = "B", nationalId = TestData.NationalId(7),
             dateOfBirth = "1990-01-01", employmentStatus = "Employed", phoneNumber = "1", address = "a", city = "a", country = "a"
@@ -458,7 +458,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
         var fatih = await NewPersonAsync(1, "Fatih");
         using var customer = await LoginAsCustomerAsync(fatih);
 
-        var response = await customer.PostAsJsonAsync("/api/individual-customers", new { }, Json, Ct);
+        var response = await customer.PostAsJsonAsync("/api/v0/individual-customers", new { }, Json, Ct);
 
         await AssertProblem(response, HttpStatusCode.Forbidden, "urn:problem:authorization");
     }
@@ -466,7 +466,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
     [Fact]
     public async Task ACorporateCustomer_LogsInAndSeesOnlyItself()
     {
-        var response = await PostAsync("/api/corporate-customers", new CreateCorporateCustomerCommand
+        var response = await PostAsync("/api/v0/corporate-customers", new CreateCorporateCustomerCommand
         {
             Email = "acme@bank.test", Password = CustomerPassword, PhoneNumber = "2125551234", Address = "Plaza", City = "Istanbul",
             Country = "Turkey", CompanyName = "Acme", TaxNumber = "1234567890", TaxOffice = "Kadikoy",
@@ -477,9 +477,9 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
 
         using var company = await CustomerClientAsync("acme@bank.test");
 
-        (await company.GetAsync($"/api/corporate-customers/{companyId}", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await company.GetAsync($"/api/individual-customers/{fatih.Id}", Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        (await company.GetAsync($"/api/corporate-customers/{Guid.NewGuid()}", Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await company.GetAsync($"/api/v0/corporate-customers/{companyId}", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await company.GetAsync($"/api/v0/individual-customers/{fatih.Id}", Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await company.GetAsync($"/api/v0/corporate-customers/{Guid.NewGuid()}", Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     // ---- staff accounts ----
@@ -487,19 +487,19 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
     [Fact]
     public async Task Staff_CanCreateAnotherStaffAccount_ThatCanLogin()
     {
-        var created = await PostAsync("/api/users/staff", new { email = "second.staff@bank.test", password = "Second-Passw0rd-1" });
+        var created = await PostAsync("/api/v0/users/staff", new { email = "second.staff@bank.test", password = "Second-Passw0rd-1" });
 
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
         string token = await LoginAsync("second.staff@bank.test", "Second-Passw0rd-1");
         using var second = ClientFor(token);
-        (await second.GetAsync("/api/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await second.GetAsync("/api/v0/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
     public async Task CreatingStaff_WithAWeakPasswordOrADuplicateEmail_Returns400()
     {
-        (await PostAsync("/api/users/staff", new { email = "x@bank.test", password = "weak" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await PostAsync("/api/users/staff", new { email = StaffEmail, password = "Second-Passw0rd-1" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await PostAsync("/api/v0/users/staff", new { email = "x@bank.test", password = "weak" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await PostAsync("/api/v0/users/staff", new { email = StaffEmail, password = "Second-Passw0rd-1" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     // ---- swagger ----
@@ -507,7 +507,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
     [Fact]
     public async Task OpenApiDocument_DescribesTheBearerScheme_AndLocksOnlyTheProtectedOperations()
     {
-        var doc = await ReadJsonAsync(await AnonymousClient.GetAsync("/openapi/v1.json", Ct));
+        var doc = await ReadJsonAsync(await AnonymousClient.GetAsync("/openapi/v0.json", Ct));
 
         var scheme = doc.GetProperty("components").GetProperty("securitySchemes").GetProperty("Bearer");
         (scheme.GetProperty("type").GetString(), scheme.GetProperty("scheme").GetString(), scheme.GetProperty("bearerFormat").GetString())
@@ -515,18 +515,18 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
 
         JsonElement Operation(string path, string verb) => doc.GetProperty("paths").GetProperty(path).GetProperty(verb);
 
-        Operation("/api/individual-customers", "get").TryGetProperty("security", out var secured).ShouldBeTrue();
+        Operation("/api/v0/individual-customers", "get").TryGetProperty("security", out var secured).ShouldBeTrue();
         secured.GetRawText().ShouldContain("Bearer");
-        Operation("/api/auth/me", "get").TryGetProperty("security", out _).ShouldBeTrue();
-        Operation("/api/auth/login", "post").TryGetProperty("security", out _).ShouldBeFalse();
-        Operation("/api/auth/refresh", "post").TryGetProperty("security", out _).ShouldBeFalse();
-        Operation("/api/auth/verify-email", "post").TryGetProperty("security", out _).ShouldBeFalse();
+        Operation("/api/v0/auth/me", "get").TryGetProperty("security", out _).ShouldBeTrue();
+        Operation("/api/v0/auth/login", "post").TryGetProperty("security", out _).ShouldBeFalse();
+        Operation("/api/v0/auth/refresh", "post").TryGetProperty("security", out _).ShouldBeFalse();
+        Operation("/api/v0/auth/verify-email", "post").TryGetProperty("security", out _).ShouldBeFalse();
     }
 
     [Fact]
     public async Task SwaggerUi_AndTheDocument_AreReachableWithoutLoggingIn()
     {
         (await AnonymousClient.GetAsync("/swagger/index.html", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await AnonymousClient.GetAsync("/openapi/v1.json", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await AnonymousClient.GetAsync("/openapi/v0.json", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 }

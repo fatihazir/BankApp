@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using Application.Features.LoanApplications.Commands;
 using Application.Features.LoanApplications.Commands.Approve;
 using Application.Features.LoanApplications.Commands.Cancel;
@@ -16,7 +17,8 @@ namespace WebApi.Controllers;
 
 [ApiController]
 [Authorize]
-[Route("api/loan-applications")]
+[ApiVersion("0")]
+[Route("api/v{version:apiVersion}/loan-applications")]
 public class LoanApplicationsController : ControllerBase
 {
     private readonly IMediator _mediator;

@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using Application.Features.Auth.Commands.Login;
 using Application.Features.Auth.Commands.Logout;
 using Application.Features.Auth.Commands.Refresh;
@@ -11,7 +12,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace WebApi.Controllers;
 
 [ApiController]
-[Route("api/auth")]
+[ApiVersion("0")]
+[Route("api/v{version:apiVersion}/auth")]
 public class AuthController : ControllerBase
 {
     private readonly IMediator _mediator;

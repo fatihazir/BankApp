@@ -10,7 +10,7 @@ namespace WebApi.IntegrationTests.Controllers;
 [Collection(DatabaseCollection.Name)]
 public class LoanTypesControllerTests(SqlServerFixture database) : ApiTestBase(database)
 {
-    private const string Url = "/api/loan-types";
+    private const string Url = "/api/v0/loan-types";
 
     [Fact]
     public async Task Get_ReturnsThePagedSeededTypes_WithTheirSubTypes()
@@ -96,7 +96,7 @@ public class LoanTypesControllerTests(SqlServerFixture database) : ApiTestBase(d
     [Fact]
     public async Task SwaggerExamples_ForLoanTypes_AreAccepted()
     {
-        var doc = await ReadJsonAsync(await Client.GetAsync("/openapi/v1.json", Ct));
+        var doc = await ReadJsonAsync(await Client.GetAsync("/openapi/v0.json", Ct));
         JsonElement Example(string path) => doc.GetProperty("paths").GetProperty(path).GetProperty("post")
             .GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("example");
 

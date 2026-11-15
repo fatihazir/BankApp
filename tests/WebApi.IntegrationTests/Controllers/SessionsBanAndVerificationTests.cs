@@ -17,7 +17,7 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
     private async Task<Customer> NewCustomerAsync(int seed = 1)
     {
         string email = $"customer{seed}@bank.test";
-        var response = await PostAsync("/api/individual-customers", new CreateIndividualCustomerCommand
+        var response = await PostAsync("/api/v0/individual-customers", new CreateIndividualCustomerCommand
         {
             Email = email, Password = CustomerPassword, PhoneNumber = "5551112233", Address = "Street", City = "Istanbul", Country = "Turkey",
             FirstName = "Customer", LastName = seed.ToString(), NationalId = TestData.NationalId(seed), DateOfBirth = new DateOnly(1990, 1, 1),
@@ -29,7 +29,7 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
 
     private async Task<JsonElement> LoginJsonAsync(string email, string password = CustomerPassword)
     {
-        var response = await AnonymousClient.PostAsJsonAsync("/api/auth/login", new { email, password }, Json, Ct);
+        var response = await AnonymousClient.PostAsJsonAsync("/api/v0/auth/login", new { email, password }, Json, Ct);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         return await ReadJsonAsync(response);
     }
@@ -38,14 +38,14 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
 
     private static string Refresh(JsonElement login) => login.GetProperty("refreshToken").GetString()!;
 
-    private async Task<HttpStatusCode> StatusWith(string accessToken, string url = "/api/auth/me")
+    private async Task<HttpStatusCode> StatusWith(string accessToken, string url = "/api/v0/auth/me")
     {
         using var client = ClientFor(accessToken);
         return (await client.GetAsync(url, Ct)).StatusCode;
     }
 
     private Task<HttpResponseMessage> RefreshAsync(string refreshToken) =>
-        AnonymousClient.PostAsJsonAsync("/api/auth/refresh", new { refreshToken }, Json, Ct);
+        AnonymousClient.PostAsJsonAsync("/api/v0/auth/refresh", new { refreshToken }, Json, Ct);
 
     // ---- login returns a token pair ----
 
@@ -126,9 +126,9 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
         (await StatusWith(Access(login))).ShouldBe(HttpStatusCode.OK);
 
         using var client = ClientFor(Access(login));
-        (await client.PostAsync("/api/auth/logout", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await client.PostAsync("/api/v0/auth/logout", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        var next = await client.GetAsync("/api/auth/me", Ct);
+        var next = await client.GetAsync("/api/v0/auth/me", Ct);
         next.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await RefreshAsync(Refresh(login))).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
@@ -141,7 +141,7 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
         var laptop = await LoginJsonAsync(customer.Email);
 
         using var phoneClient = ClientFor(Access(phone));
-        await phoneClient.PostAsync("/api/auth/logout", null, Ct);
+        await phoneClient.PostAsync("/api/v0/auth/logout", null, Ct);
 
         (await StatusWith(Access(phone))).ShouldBe(HttpStatusCode.Unauthorized);
         (await StatusWith(Access(laptop))).ShouldBe(HttpStatusCode.OK);
@@ -149,7 +149,7 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
 
     [Fact]
     public async Task Logout_WithoutAToken_Returns401() =>
-        (await AnonymousClient.PostAsync("/api/auth/logout", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await AnonymousClient.PostAsync("/api/v0/auth/logout", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
     // ---- ban: immediate ----
 
@@ -158,14 +158,14 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
     {
         var customer = await NewCustomerAsync();
         var login = await LoginJsonAsync(customer.Email);
-        (await StatusWith(Access(login), $"/api/individual-customers/{customer.Id}")).ShouldBe(HttpStatusCode.OK);
+        (await StatusWith(Access(login), $"/api/v0/individual-customers/{customer.Id}")).ShouldBe(HttpStatusCode.OK);
 
-        var ban = await PostAsync($"/api/users/{customer.Id}/ban", new { reason = "Suspicious transfers" });
+        var ban = await PostAsync($"/api/v0/users/{customer.Id}/ban", new { reason = "Suspicious transfers" });
         ban.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await ReadJsonAsync(ban)).GetProperty("revokedSessions").GetInt32().ShouldBe(1);
 
         // The very next request with the very same, still unexpired token:
-        var after = await ClientFor(Access(login)).GetAsync($"/api/individual-customers/{customer.Id}", Ct);
+        var after = await ClientFor(Access(login)).GetAsync($"/api/v0/individual-customers/{customer.Id}", Ct);
         after.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await ReadJsonAsync(after)).GetProperty("type").GetString().ShouldBe("urn:problem:authentication");
     }
@@ -177,12 +177,12 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
         var phone = await LoginJsonAsync(customer.Email);
         var laptop = await LoginJsonAsync(customer.Email);
 
-        await PostAsync($"/api/users/{customer.Id}/ban", new { reason = "x" });
+        await PostAsync($"/api/v0/users/{customer.Id}/ban", new { reason = "x" });
 
         (await StatusWith(Access(phone))).ShouldBe(HttpStatusCode.Unauthorized);
         (await StatusWith(Access(laptop))).ShouldBe(HttpStatusCode.Unauthorized);
         (await RefreshAsync(Refresh(phone))).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        (await AnonymousClient.PostAsJsonAsync("/api/auth/login", new { email = customer.Email, password = CustomerPassword }, Json, Ct))
+        (await AnonymousClient.PostAsJsonAsync("/api/v0/auth/login", new { email = customer.Email, password = CustomerPassword }, Json, Ct))
             .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
@@ -191,9 +191,9 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
     {
         var customer = await NewCustomerAsync();
         var before = await LoginJsonAsync(customer.Email);
-        await PostAsync($"/api/users/{customer.Id}/ban", new { reason = "x" });
+        await PostAsync($"/api/v0/users/{customer.Id}/ban", new { reason = "x" });
 
-        (await Client.PostAsync($"/api/users/{customer.Id}/unban", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await Client.PostAsync($"/api/v0/users/{customer.Id}/unban", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         (await StatusWith(Access(before))).ShouldBe(HttpStatusCode.Unauthorized);
         (await RefreshAsync(Refresh(before))).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
@@ -207,7 +207,7 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
         var other = await NewCustomerAsync(2);
         var otherLogin = await LoginJsonAsync(other.Email);
 
-        await PostAsync($"/api/users/{banned.Id}/ban", new { reason = "x" });
+        await PostAsync($"/api/v0/users/{banned.Id}/ban", new { reason = "x" });
 
         (await StatusWith(Access(otherLogin))).ShouldBe(HttpStatusCode.OK);
         (await StatusWith(await LoginAsync(StaffEmail, StaffPassword))).ShouldBe(HttpStatusCode.OK);
@@ -216,32 +216,32 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
     [Fact]
     public async Task ABannedStaffMember_IsLockedOutAtOnce_LikeAnyoneElse()
     {
-        await PostAsync("/api/users/staff", new { email = "second@bank.test", password = "Second-Passw0rd-1" });
+        await PostAsync("/api/v0/users/staff", new { email = "second@bank.test", password = "Second-Passw0rd-1" });
         var second = await LoginJsonAsync("second@bank.test", "Second-Passw0rd-1");
         using var secondClient = ClientFor(Access(second));
-        (await secondClient.GetAsync("/api/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        Guid secondId = (await ReadJsonAsync(await Client.GetAsync("/api/users?role=BankStaff&size=50", Ct)))
+        (await secondClient.GetAsync("/api/v0/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        Guid secondId = (await ReadJsonAsync(await Client.GetAsync("/api/v0/users?role=BankStaff&size=50", Ct)))
             .GetProperty("items").EnumerateArray().Single(u => u.GetProperty("email").GetString() == "second@bank.test").GetProperty("id").GetGuid();
 
-        await PostAsync($"/api/users/{secondId}/ban", new { reason = "Left the bank" });
+        await PostAsync($"/api/v0/users/{secondId}/ban", new { reason = "Left the bank" });
 
-        (await secondClient.GetAsync("/api/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await secondClient.GetAsync("/api/v0/individual-customers", Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task Ban_Rules_NoSelfBan_NoDoubleBan_UnknownUser_ReasonRequired()
     {
         var customer = await NewCustomerAsync();
-        Guid staffId = (await ReadJsonAsync(await Client.GetAsync("/api/auth/me", Ct))).GetProperty("userId").GetGuid();
+        Guid staffId = (await ReadJsonAsync(await Client.GetAsync("/api/v0/auth/me", Ct))).GetProperty("userId").GetGuid();
 
-        (await PostAsync($"/api/users/{staffId}/ban", new { reason = "x" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await PostAsync($"/api/users/{Guid.NewGuid()}/ban", new { reason = "x" })).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        (await PostAsync($"/api/users/{customer.Id}/ban", new { reason = "" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await PostAsync($"/api/v0/users/{staffId}/ban", new { reason = "x" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await PostAsync($"/api/v0/users/{Guid.NewGuid()}/ban", new { reason = "x" })).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await PostAsync($"/api/v0/users/{customer.Id}/ban", new { reason = "" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
-        (await PostAsync($"/api/users/{customer.Id}/ban", new { reason = "x" })).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await PostAsync($"/api/users/{customer.Id}/ban", new { reason = "again" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await Client.PostAsync($"/api/users/{Guid.NewGuid()}/unban", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        (await Client.PostAsync($"/api/users/{staffId}/unban", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.BadRequest); // not banned
+        (await PostAsync($"/api/v0/users/{customer.Id}/ban", new { reason = "x" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await PostAsync($"/api/v0/users/{customer.Id}/ban", new { reason = "again" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await Client.PostAsync($"/api/v0/users/{Guid.NewGuid()}/unban", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await Client.PostAsync($"/api/v0/users/{staffId}/unban", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.BadRequest); // not banned
     }
 
     [Fact]
@@ -250,11 +250,11 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
         var customer = await NewCustomerAsync();
         using var client = ClientFor(Access(await LoginJsonAsync(customer.Email)));
 
-        (await client.PostAsJsonAsync($"/api/users/{customer.Id}/ban", new { reason = "x" }, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await client.PostAsync($"/api/users/{customer.Id}/unban", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await client.GetAsync("/api/users", Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await client.PostAsJsonAsync($"/api/v0/users/{customer.Id}/ban", new { reason = "x" }, Json, Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await client.PostAsync($"/api/v0/users/{customer.Id}/unban", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await client.GetAsync("/api/v0/users", Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
-        (await AnonymousClient.GetAsync("/api/users", Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await AnonymousClient.GetAsync("/api/v0/users", Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     // ---- deleting a customer ----
@@ -265,11 +265,11 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
         var customer = await NewCustomerAsync();
         var login = await LoginJsonAsync(customer.Email);
 
-        (await Client.DeleteAsync($"/api/individual-customers/{customer.Id}", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await Client.DeleteAsync($"/api/v0/individual-customers/{customer.Id}", Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         (await StatusWith(Access(login))).ShouldBe(HttpStatusCode.Unauthorized);
         (await RefreshAsync(Refresh(login))).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        (await AnonymousClient.PostAsJsonAsync("/api/auth/login", new { email = customer.Email, password = CustomerPassword }, Json, Ct))
+        (await AnonymousClient.PostAsJsonAsync("/api/v0/auth/login", new { email = customer.Email, password = CustomerPassword }, Json, Ct))
             .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
@@ -279,9 +279,9 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
     public async Task TheUserList_ShowsStaffAndCustomers_WithBanInformation_AndNoSecrets()
     {
         var customer = await NewCustomerAsync();
-        await PostAsync($"/api/users/{customer.Id}/ban", new { reason = "Fraud" });
+        await PostAsync($"/api/v0/users/{customer.Id}/ban", new { reason = "Fraud" });
 
-        var response = await Client.GetAsync("/api/users?size=50", Ct);
+        var response = await Client.GetAsync("/api/v0/users?size=50", Ct);
         var page = await ReadJsonAsync(response);
 
         page.GetProperty("count").GetInt32().ShouldBe(2);
@@ -305,13 +305,13 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
         await NewCustomerAsync(1);
         await NewCustomerAsync(2);
 
-        var staff = await ReadJsonAsync(await Client.GetAsync("/api/users?role=BankStaff", Ct));
-        var customers = await ReadJsonAsync(await Client.GetAsync("/api/users?role=Customer&size=1", Ct));
+        var staff = await ReadJsonAsync(await Client.GetAsync("/api/v0/users?role=BankStaff", Ct));
+        var customers = await ReadJsonAsync(await Client.GetAsync("/api/v0/users?role=Customer&size=1", Ct));
 
         staff.GetProperty("count").GetInt32().ShouldBe(1);
         (customers.GetProperty("count").GetInt32(), customers.GetProperty("pages").GetInt32(), customers.GetProperty("items").GetArrayLength()).ShouldBe((2, 2, 1));
-        (await Client.GetAsync("/api/users?size=0", Ct)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await Client.GetAsync("/api/users?role=99", Ct)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await Client.GetAsync("/api/v0/users?size=0", Ct)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await Client.GetAsync("/api/v0/users?role=99", Ct)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     // ---- e-mail verification ----
@@ -323,14 +323,14 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
         Emails.Sent.ShouldHaveSingleItem().To.ShouldBe(customer.Email);
         string token = Emails.TokenSentTo(customer.Email);
         using var client = ClientFor(await LoginAsync(customer.Email, CustomerPassword));
-        (await ReadJsonAsync(await client.GetAsync("/api/auth/me", Ct))).GetProperty("emailVerified").GetBoolean().ShouldBeFalse();
+        (await ReadJsonAsync(await client.GetAsync("/api/v0/auth/me", Ct))).GetProperty("emailVerified").GetBoolean().ShouldBeFalse();
 
-        var verify = await AnonymousClient.PostAsJsonAsync("/api/auth/verify-email", new { email = customer.Email, token }, Json, Ct);
+        var verify = await AnonymousClient.PostAsJsonAsync("/api/v0/auth/verify-email", new { email = customer.Email, token }, Json, Ct);
 
         verify.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await ReadJsonAsync(await client.GetAsync("/api/auth/me", Ct))).GetProperty("emailVerified").GetBoolean().ShouldBeTrue();
+        (await ReadJsonAsync(await client.GetAsync("/api/v0/auth/me", Ct))).GetProperty("emailVerified").GetBoolean().ShouldBeTrue();
 
-        var again = await AnonymousClient.PostAsJsonAsync("/api/auth/verify-email", new { email = customer.Email, token }, Json, Ct);
+        var again = await AnonymousClient.PostAsJsonAsync("/api/v0/auth/verify-email", new { email = customer.Email, token }, Json, Ct);
         again.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await ReadJsonAsync(again)).GetProperty("type").GetString().ShouldBe("urn:problem:business");
     }
@@ -342,9 +342,9 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
         var second = await NewCustomerAsync(2);
         string secondsToken = Emails.TokenSentTo(second.Email);
 
-        var wrong = await AnonymousClient.PostAsJsonAsync("/api/auth/verify-email", new { email = first.Email, token = "wrong" }, Json, Ct);
-        var foreign = await AnonymousClient.PostAsJsonAsync("/api/auth/verify-email", new { email = first.Email, token = secondsToken }, Json, Ct);
-        var unknown = await AnonymousClient.PostAsJsonAsync("/api/auth/verify-email", new { email = "nobody@bank.test", token = "x" }, Json, Ct);
+        var wrong = await AnonymousClient.PostAsJsonAsync("/api/v0/auth/verify-email", new { email = first.Email, token = "wrong" }, Json, Ct);
+        var foreign = await AnonymousClient.PostAsJsonAsync("/api/v0/auth/verify-email", new { email = first.Email, token = secondsToken }, Json, Ct);
+        var unknown = await AnonymousClient.PostAsJsonAsync("/api/v0/auth/verify-email", new { email = "nobody@bank.test", token = "x" }, Json, Ct);
 
         new[] { wrong, foreign, unknown }.ShouldAllBe(r => r.StatusCode == HttpStatusCode.BadRequest);
         var messages = new[] { wrong, foreign, unknown }.Select(r => ReadJsonAsync(r).Result.GetProperty("detail").GetString()).Distinct();
@@ -358,16 +358,16 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
         string oldToken = Emails.TokenSentTo(customer.Email);
         using var client = ClientFor(await LoginAsync(customer.Email, CustomerPassword));
 
-        var resend = await client.PostAsync("/api/auth/send-verification-email", null, Ct);
+        var resend = await client.PostAsync("/api/v0/auth/send-verification-email", null, Ct);
 
         resend.StatusCode.ShouldBe(HttpStatusCode.OK);
         Emails.Sent.Count.ShouldBe(2);
-        (await AnonymousClient.PostAsJsonAsync("/api/auth/verify-email", new { email = customer.Email, token = oldToken }, Json, Ct))
+        (await AnonymousClient.PostAsJsonAsync("/api/v0/auth/verify-email", new { email = customer.Email, token = oldToken }, Json, Ct))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await AnonymousClient.PostAsJsonAsync("/api/auth/verify-email", new { email = customer.Email, token = Emails.TokenSentTo(customer.Email) }, Json, Ct))
+        (await AnonymousClient.PostAsJsonAsync("/api/v0/auth/verify-email", new { email = customer.Email, token = Emails.TokenSentTo(customer.Email) }, Json, Ct))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await client.PostAsync("/api/auth/send-verification-email", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.BadRequest); // already verified
-        (await AnonymousClient.PostAsync("/api/auth/send-verification-email", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await client.PostAsync("/api/v0/auth/send-verification-email", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.BadRequest); // already verified
+        (await AnonymousClient.PostAsync("/api/v0/auth/send-verification-email", null, Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -387,30 +387,30 @@ public class SessionsBanAndVerificationTests(SqlServerFixture database) : ApiTes
     [Fact]
     public async Task TheSwaggerDocument_LocksTheSessionEndpoints_AndLeavesLoginRefreshAndVerifyOpen()
     {
-        var doc = await ReadJsonAsync(await AnonymousClient.GetAsync("/openapi/v1.json", Ct));
+        var doc = await ReadJsonAsync(await AnonymousClient.GetAsync("/openapi/v0.json", Ct));
         bool Locked(string path, string verb) => doc.GetProperty("paths").GetProperty(path).GetProperty(verb).TryGetProperty("security", out _);
 
-        Locked("/api/auth/logout", "post").ShouldBeTrue();
-        Locked("/api/auth/send-verification-email", "post").ShouldBeTrue();
-        Locked("/api/users", "get").ShouldBeTrue();
-        Locked("/api/users/{id}/ban", "post").ShouldBeTrue();
-        Locked("/api/auth/login", "post").ShouldBeFalse();
-        Locked("/api/auth/refresh", "post").ShouldBeFalse();
-        Locked("/api/auth/verify-email", "post").ShouldBeFalse();
-        doc.GetProperty("paths").TryGetProperty("/api/auth/register-customer", out _).ShouldBeFalse(); // a customer is created with its login
+        Locked("/api/v0/auth/logout", "post").ShouldBeTrue();
+        Locked("/api/v0/auth/send-verification-email", "post").ShouldBeTrue();
+        Locked("/api/v0/users", "get").ShouldBeTrue();
+        Locked("/api/v0/users/{id}/ban", "post").ShouldBeTrue();
+        Locked("/api/v0/auth/login", "post").ShouldBeFalse();
+        Locked("/api/v0/auth/refresh", "post").ShouldBeFalse();
+        Locked("/api/v0/auth/verify-email", "post").ShouldBeFalse();
+        doc.GetProperty("paths").TryGetProperty("/api/v0/auth/register-customer", out _).ShouldBeFalse(); // a customer is created with its login
     }
 
     [Fact]
     public async Task TheSwaggerExamples_OfTheCustomerAndUserEndpoints_AreValidRequests()
     {
-        var doc = await ReadJsonAsync(await AnonymousClient.GetAsync("/openapi/v1.json", Ct));
+        var doc = await ReadJsonAsync(await AnonymousClient.GetAsync("/openapi/v0.json", Ct));
         StringContent Example(string path) => new(
             doc.GetProperty("paths").GetProperty(path).GetProperty("post").GetProperty("requestBody").GetProperty("content")
                 .GetProperty("application/json").GetProperty("example").GetRawText(),
             System.Text.Encoding.UTF8, "application/json");
 
-        (await Client.PostAsync("/api/individual-customers", Example("/api/individual-customers"), Ct)).StatusCode.ShouldBe(HttpStatusCode.Created);
-        (await Client.PostAsync("/api/corporate-customers", Example("/api/corporate-customers"), Ct)).StatusCode.ShouldBe(HttpStatusCode.Created);
-        (await Client.PostAsync("/api/users/staff", Example("/api/users/staff"), Ct)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await Client.PostAsync("/api/v0/individual-customers", Example("/api/v0/individual-customers"), Ct)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await Client.PostAsync("/api/v0/corporate-customers", Example("/api/v0/corporate-customers"), Ct)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await Client.PostAsync("/api/v0/users/staff", Example("/api/v0/users/staff"), Ct)).StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 }

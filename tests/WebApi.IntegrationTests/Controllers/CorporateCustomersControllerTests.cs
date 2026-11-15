@@ -12,7 +12,7 @@ namespace WebApi.IntegrationTests.Controllers;
 [Collection(DatabaseCollection.Name)]
 public class CorporateCustomersControllerTests(SqlServerFixture database) : ApiTestBase(database)
 {
-    private const string BaseUrl = "/api/corporate-customers";
+    private const string BaseUrl = "/api/v0/corporate-customers";
 
     private static CreateCorporateCustomerCommand NewCustomer(string taxNumber = "1234567890") => new()
     {
@@ -207,7 +207,7 @@ public class CorporateCustomersControllerTests(SqlServerFixture database) : ApiT
     [Fact]
     public async Task OpenApiDocument_ContainsPrefilledExamples_ForCreateAndUpdate()
     {
-        var doc = await ReadJsonAsync(await Client.GetAsync("/openapi/v1.json", Ct));
+        var doc = await ReadJsonAsync(await Client.GetAsync("/openapi/v0.json", Ct));
 
         JsonElement Example(string path, string verb) => doc.GetProperty("paths").GetProperty(path).GetProperty(verb)
             .GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("example");

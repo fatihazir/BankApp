@@ -33,6 +33,9 @@ public class HttpExceptionHandler : ExceptionHandler
     public override Task HandleException(ConflictException exception) =>
         Write(new ConflictProblemDetails(exception.Message));
 
+    public override Task HandleException(TooManyRequestsException exception) =>
+        Write(new TooManyRequestsProblemDetails(exception.Message));
+
     /// <summary>The exception message is never returned to the caller, because it may expose internals.</summary>
     public override Task HandleException(Exception exception) =>
         Write(new InternalServerErrorProblemDetails("An unexpected error occurred."));

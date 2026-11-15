@@ -56,6 +56,8 @@ public class ExceptionMiddleware
                 return handler.HandleException(e);
             case ConflictException e:
                 return handler.HandleException(e);
+            case TooManyRequestsException e:
+                return handler.HandleException(e);
             case DbUpdateConcurrencyException:
                 // Somebody changed the same row between our read and our write. Nothing was saved.
                 return handler.HandleException(new ConflictException("The data was changed by someone else. Reload it and try again."));

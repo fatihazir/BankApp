@@ -148,6 +148,16 @@ public class ExceptionMiddlewareTests
     }
 
     [Fact]
+    public async Task TooManyRequestsException_Returns429()
+    {
+        var result = await Run(_ => throw new TooManyRequestsException("Slow down."));
+
+        result.Status.ShouldBe(429);
+        result.Body.GetProperty("type").GetString().ShouldBe("urn:problem:rate-limit");
+        result.Body.GetProperty("detail").GetString().ShouldBe("Slow down.");
+    }
+
+    [Fact]
     public async Task AuthorizationException_Returns403()
     {
         var result = await Run(_ => throw new AuthorizationException("Not allowed."));

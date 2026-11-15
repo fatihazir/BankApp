@@ -3,6 +3,7 @@ using Asp.Versioning;
 using Application;
 using BankingSystemCore.Security;
 using BankingSystemCore.CrossCuttingConcerns.Exceptions.Middlewares;
+using BankingSystemCore.CrossCuttingConcerns.Http;
 using Microsoft.EntityFrameworkCore;
 using Persistence;
 using Persistence.Contexts;
@@ -23,6 +24,10 @@ builder.Services.AddApplicationServices();
 builder.Services.AddPersistenceServices(builder.Configuration);
 builder.Services.AddSecurityServices(builder.Configuration);
 builder.Services.AddJwtAuthentication();
+builder.Services.AddHostHardening(builder.Configuration);
+
+// Do not tell the world which web server this is.
+builder.WebHost.ConfigureKestrel(kestrel => kestrel.AddServerHeader = false);
 
 builder.Services
     .AddControllers(options =>
@@ -56,7 +61,13 @@ builder.Services
 
 var app = builder.Build();
 
+// First of all: after this, the client address and the scheme are the real ones (behind a trusted proxy).
+app.UseForwardedHeaders();
+
 app.UseCustomExceptionMiddleware();
+
+// The Swagger UI is a page and needs scripts and styles; the API itself gets the strictest policy.
+app.UseSecurityHeaders(options => options.PathsWithoutContentSecurityPolicy.Add("/swagger"));
 
 if (app.Environment.IsDevelopment())
 {
@@ -75,14 +86,19 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
+    app.UseHsts();
     app.UseHttpsRedirection();
 }
+
+app.UseCors();
+app.UseRateLimiter();
 
 // Authentication reads the token, then the MediatR AuthorizationBehavior decides what each request may do.
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthEndpoints();
 
 await StaffBootstrapper.EnsureAsync(app.Services, app.Configuration);
 

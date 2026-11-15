@@ -47,7 +47,7 @@ public abstract class ApiTestBase : IAsyncLifetime
 
     protected IServiceProvider Services => _factory.Services;
 
-    protected ApiTestBase(SqlServerFixture database)
+    protected ApiTestBase(SqlServerFixture database, Dictionary<string, string?>? extraSettings = null)
     {
         _database = database;
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
@@ -59,6 +59,10 @@ public abstract class ApiTestBase : IAsyncLifetime
             builder.UseSetting("Security:Jwt:Audience", TestAudience);
             builder.UseSetting("Security:Jwt:SecurityKey", TestKey);
             builder.UseSetting("Security:PasswordHashing:Iterations", "10"); // fast hashing in tests only
+            // Every test logs in from the same address, so the rate limit is off unless a test asks for it.
+            builder.UseSetting("RateLimiting:Enabled", "false");
+            foreach ((string key, string? value) in extraSettings ?? [])
+                builder.UseSetting(key, value);
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IEmailSender>();

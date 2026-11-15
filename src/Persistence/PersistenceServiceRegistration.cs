@@ -1,9 +1,11 @@
 using Application.Services.Repositories;
+using BankingSystemCore.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Persistence.Contexts;
+using Persistence.Exceptions;
 using Persistence.Repositories;
 
 namespace Persistence;
@@ -24,6 +26,8 @@ public static class PersistenceServiceRegistration
 
         // Repositories stamp CreateDate/UpdateDate/DeleteDate with this clock. A host or a test may register its own first.
         services.TryAddSingleton(TimeProvider.System);
+
+        services.AddSingleton<IUniqueViolationDetector, SqlServerUniqueViolationDetector>();
 
         services.AddScoped<IIndividualCustomerRepository, IndividualCustomerRepository>();
         services.AddScoped<ICorporateCustomerRepository, CorporateCustomerRepository>();

@@ -51,6 +51,17 @@ public class IndividualCustomersControllerTests(SqlServerFixture database) : Api
     }
 
     [Fact]
+    public async Task SameSignUpEightTimesAtOnce_GivesOneCreated_AndNeverAServerError()
+    {
+        // Every request passes the "is it taken?" check before any of them saves, so the unique index decides.
+        var responses = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => PostAsync(BaseUrl, NewCustomer())));
+
+        var statuses = responses.Select(r => r.StatusCode).ToList();
+        statuses.Count(s => s == HttpStatusCode.Created).ShouldBe(1);
+        statuses.ShouldAllBe(s => s == HttpStatusCode.Created || s == HttpStatusCode.BadRequest || s == HttpStatusCode.Conflict);
+    }
+
+    [Fact]
     public async Task Get_ById_Returns200_WithStoredValues_AndEnumAsText()
     {
         var created = await CreateAsync();

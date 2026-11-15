@@ -45,6 +45,29 @@ public class CustomerSchemaTests(SqlServerFixture database) : IntegrationTestBas
         await Should.ThrowAsync<DbUpdateException>(insertTwice);
     }
 
+    [Fact]
+    public async Task TheDetector_RecognisesADuplicateValue_ButNotAnotherDatabaseError()
+    {
+        using var scope = NewScope();
+        var detector = Resolve<BankingSystemCore.Repositories.IUniqueViolationDetector>(scope);
+
+        var duplicate = await Should.ThrowAsync<DbUpdateException>(() => UsingDbContext(async db =>
+        {
+            db.IndividualCustomers.AddRange(NewIndividual("IND-1"), NewIndividual("IND-2"));
+            return await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }));
+        var tooLong = await Should.ThrowAsync<DbUpdateException>(() => UsingDbContext(async db =>
+        {
+            var customer = NewIndividual("IND-3");
+            customer.FirstName = new string('x', 500); // longer than the column
+            db.IndividualCustomers.Add(customer);
+            return await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }));
+
+        detector.IsUniqueViolation(duplicate).ShouldBeTrue();
+        detector.IsUniqueViolation(tooLong).ShouldBeFalse();
+    }
+
     private static IndividualCustomer NewIndividual(string customerNumber, string? nationalId = null) => new()
     {
         CustomerNumber = customerNumber,

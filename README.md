@@ -1,209 +1,248 @@
 # BankApp – Loan Module
 
-Loan (credit) module of a banking application, built with **.NET 10** and **C#** following **Clean Architecture** and **CQRS**.
+.NET 10 · C# · Clean Architecture · CQRS (MediatR) · EF Core 10 / SQL Server · JWT + server-side sessions.
 
-## Solution Structure
+Design rules: [docs/ARCHITECTURE_PRINCIPLES.md](docs/ARCHITECTURE_PRINCIPLES.md)
 
-```
-BankApp/
-├── BankApp.slnx
-├── .devcontainer/
-│   └── devcontainer.json        # VS Code Dev Container (.NET 10 SDK)
-├── docker-compose.yml           # Local SQL Server + API (Swagger)
-├── scripts/
-│   ├── dotnet.sh                # Runs the .NET CLI inside Docker (no local SDK needed)
-│   ├── ef.sh                    # Runs dotnet-ef (migrations) inside Docker
-│   └── test.sh                  # Runs all tests (integration tests need the Docker socket)
-└── src/
-    ├── BankingSystemCore/       # Shared kernel, reusable across any project
-    │   ├── Repositories/        # Entity base, generic repository, EF implementation, paging
-    │   └── CrossCuttingConcerns/Exceptions/
-    │       ├── Types/           # BusinessException, ValidationException, NotFoundException, AuthorizationException
-    │       ├── HttpProblemDetails/  # RFC 7807 responses per exception type
-    │       ├── Handlers/        # ExceptionHandler (abstract), HttpExceptionHandler
-    │       └── Middlewares/     # ExceptionMiddleware, UseCustomExceptionMiddleware()
-    ├── Domain/
-    │   └── Entities/            # Database entities of the loan module
-    ├── Application/             # Use cases: commands, queries, handlers, validators, DTOs
-    ├── Persistence/             # EF Core DbContext, configurations, repositories
-    └── WebApi/                  # ASP.NET Core Web API (controllers), composition root
-tests/
-├── BankingSystemCore.UnitTests/ # Core: exception middleware, JWT, hashing, tokens, mailing, authorization pipeline
-├── Application.UnitTests/       # Fast tests, no database (rules, validators, mappers, handlers)
-├── Persistence.IntegrationTests/# Handlers + EF Core against a real SQL Server (Testcontainers)
-└── WebApi.IntegrationTests/     # HTTP level: controllers, error format, Swagger
+## 1. Layers
+
+```mermaid
+flowchart LR
+    WebApi --> Application
+    WebApi --> Persistence
+    Persistence --> Application
+    Application --> Domain
+    Domain --> Core[BankingSystemCore]
+    Application --> Core
 ```
 
-## Layers and Dependencies
+| Project | Content |
+|---|---|
+| `BankingSystemCore` | Reusable kernel: `Entity<T>`, generic repository + EF impl, `Paginate<T>`, exceptions + middleware, JWT, hashing, `ICurrentUser`, mailing, `AuthorizationBehavior`. No product logic. |
+| `Domain` | Entities + enums only. |
+| `Application` | Commands, queries, handlers, FluentValidation, Mapperly mappers, rules, repository ports. |
+| `Persistence` | `DbContext`, entity configurations, repositories, migrations. |
+| `WebApi` | Controllers, auth setup, OpenAPI/Swagger, composition root. |
 
-```
-WebApi ──► Application ──► Domain ──► BankingSystemCore
-  │            │                             ▲
-  └──► Persistence          Application ─────┘
-```
+## 2. Request pipeline
 
-| Project             | References                   | Responsibility |
-|---------------------|------------------------------|----------------|
-| `BankingSystemCore` | –                            | Generic building blocks (base entity, repository abstractions, paging, exceptions, pipeline behaviors). Must not contain BankApp-specific logic so it can be reused in other solutions. |
-| `Domain`            | `BankingSystemCore`          | Database entities of the loan module (`Entities` folder only). |
-| `Application`       | `Domain`, `BankingSystemCore`| CQRS commands/queries and their handlers, validation, mapping, repository interfaces. |
-| `Persistence`       | `Application`                | Data access implementation (DbContext, migrations, repositories). |
-| `WebApi`            | `Application`, `Persistence` | HTTP endpoints and dependency injection setup. |
-
-Rule: dependencies always point inward. `BankingSystemCore` never references any other project.
-
-## Entities
-
-Every database entity derives from `BankingSystemCore.Repositories.Entity<T>`, where `T` is the primary key type (`int`, `Guid`, `string`, ...):
-
-| Property     | Type        | Notes |
-|--------------|-------------|-------|
-| `Id`         | `T`         | Generic primary key, initialized to `default!` |
-| `CreateDate` | `DateTime`  | |
-| `UpdateDate` | `DateTime?` | `null` until the first update |
-| `DeleteDate` | `DateTime?` | `null` unless soft-deleted |
-
-```csharp
-public class Customer : Entity<Guid> { }
+```mermaid
+flowchart LR
+    C[Client] --> EM[ExceptionMiddleware]
+    EM --> JWT[JwtBearer]
+    JWT --> SV{{ISessionValidator<br/>every request}}
+    SV --> Ctl[Controller]
+    Ctl --> M[MediatR]
+    M --> AB[AuthorizationBehavior<br/>401 / 403]
+    AB --> VB[ValidationBehavior<br/>400]
+    VB --> H[Handler]
+    H --> R[Rules<br/>400 / 404]
+    H --> Repo[(Repository)]
 ```
 
-## Run the API
+- `ISecuredRequest` declares allowed roles (explicit interface → not in JSON/Swagger). Empty = any logged-in user.
+- Ownership (`CustomerAccessPolicy`): other customer's record → 404, acting for another → 403.
+- `SecurityContractTests`: every request is secured or on the explicit open list; roles pinned per request.
+
+## 3. Data model
+
+### 3.1 User chain (table-per-type, one insert writes the whole chain)
+
+```mermaid
+classDiagram
+    direction TB
+    class User["Users (Core)"] {
+        Guid Id
+        Email
+        PasswordHash
+        IsActive
+        FailedLoginCount
+        LockoutEnd
+        EmailVerified
+        RowVersion
+    }
+    class ApplicationUser["ApplicationUsers"] {
+        Role
+        BannedDate
+        BanReason
+    }
+    class Customer["Customers"] {
+        CustomerNumber
+        PhoneNumber
+        Address / City / Country
+        CreditScore
+    }
+    class IndividualCustomer["IndividualCustomers"] {
+        FirstName / LastName
+        NationalId
+        DateOfBirth
+        EmploymentStatus
+        MonthlyIncome
+    }
+    class CorporateCustomer["CorporateCustomers"] {
+        CompanyName
+        TaxNumber / TaxOffice
+        AnnualRevenue
+        AuthorizedPersonName
+    }
+    class UserSession["UserSessions"] {
+        RefreshTokenHash
+        RefreshTokenExpiresAt
+        PreviousRefreshTokenHash
+        RevokedDate
+        RowVersion
+    }
+    User <|-- ApplicationUser
+    ApplicationUser <|-- Customer
+    Customer <|-- IndividualCustomer
+    Customer <|-- CorporateCustomer
+    User "1" --> "*" UserSession
+```
+
+`customerId == userId == JWT sub`. Role is never read from a request: customers get `Customer`; staff only via `POST /api/users/staff`.
+
+### 3.2 Loans
+
+```mermaid
+erDiagram
+    LoanType ||--o{ LoanSubType : has
+    LoanSubType ||--o{ LoanApplication : "applied for"
+    Customers ||--o{ LoanApplication : submits
+    LoanType { enum Segment }
+    LoanSubType { decimal MinAmount_MaxAmount int MinTerm_MaxTermInMonths decimal AnnualInterestRate }
+    LoanApplication { decimal RequestedAmount int TermInMonths decimal AnnualInterestRate enum Status decimal ApprovedAmount }
+```
+
+Segment rule: individual customers → individual loan types; corporate → corporate.
+
+### 3.3 Application status
+
+```mermaid
+stateDiagram-v2
+    [*] --> Submitted
+    Submitted --> UnderReview: start-review (staff)
+    UnderReview --> Approved: approve (staff)
+    UnderReview --> Rejected: reject (staff)
+    Submitted --> Cancelled: cancel
+    UnderReview --> Cancelled: cancel
+    Approved --> [*]
+    Rejected --> [*]
+    Cancelled --> [*]
+```
+
+Payment: annuity, `monthly rate = annual rate / 12`, no taxes/fees.
+
+## 4. Authentication and sessions
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant A as API
+    participant DB as DB
+    C->>A: POST /auth/login
+    A->>DB: verify password, lockout, create UserSession
+    A-->>C: access JWT (10 min, sid) + refresh (30 min)
+    C->>A: request + access JWT
+    A->>DB: session active? user active & not deleted?
+    A-->>C: 200 / 401
+    C->>A: POST /auth/refresh
+    A->>DB: rotate refresh hash
+    A-->>C: new pair
+    Note over A,DB: Reused old refresh token → session revoked
+    C->>A: ban / logout / delete
+    A->>DB: revoke session(s)
+    Note over C,A: Next request with old JWT → 401
+```
+
+| Mechanism | Value |
+|---|---|
+| Access token | JWT, 10 min, claims `sub`, `sid`, role |
+| Refresh token | opaque, 30 min, single-use, SHA-256 hash stored |
+| Password hash | PBKDF2-SHA256, 600k iterations (configurable) |
+| Lockout | 5 failures → 15 min |
+| Revocation | per-request session check → ban/logout/delete effective immediately |
+| Concurrency | `RowVersion` on `User`, `UserSession` → stale write = 409 |
+| E-mail verification | `IEmailSender` + `LoggingEmailSender`; token 24 h, single-use, hashed; `RequireVerifiedEmail=false` |
+
+## 5. API
+
+| Area | Endpoints | Access |
+|---|---|---|
+| Auth | `POST /api/auth/login` `refresh` `logout` · `GET /api/auth/me` · `POST /api/auth/send-verification-email` `verify-email` | login/refresh/verify open |
+| Users | `GET /api/users` · `POST /api/users/staff` · `POST /api/users/{id}/ban` `unban` | staff |
+| Individual customers | `POST` `GET` `GET {id}` `PUT {id}` `DELETE {id}` `/api/individual-customers` | create/list/delete staff; get/update staff + own |
+| Corporate customers | same under `/api/corporate-customers` | same |
+| Loan types | `GET/POST /api/loan-types` · `POST /api/loan-types/{id}/sub-types` | list: any; create: staff |
+| Loan applications | `POST` `GET` `GET {id}` `/api/loan-applications` · `GET .../calculate` · `POST .../{id}/cancel` | staff + own |
+| Decisions | `POST /api/loan-applications/{id}/start-review` `approve` `reject` | staff |
+
+All lists are paged. Errors: `application/problem+json`.
+
+| Exception | HTTP | `type` |
+|---|---|---|
+| Business | 400 | `urn:problem:business` |
+| Validation | 400 | `urn:problem:validation` |
+| Authentication | 401 | `urn:problem:authentication` |
+| Authorization | 403 | `urn:problem:authorization` |
+| NotFound | 404 | `urn:problem:not-found` |
+| Conflict / `DbUpdateConcurrencyException` | 409 | `urn:problem:conflict` |
+| other | 500 | `urn:problem:internal-server-error` |
+
+## 6. Run
 
 ```bash
-docker compose up -d      # SQL Server + API; first start compiles the code and takes a minute
+docker compose up -d                 # SQL Server + API
+docker compose logs -f api
+docker compose restart api           # after code changes
+docker compose down [-v]             # -v drops the database
 ```
 
-Open **http://localhost:5043/swagger** (the root URL redirects there). Request bodies of *POST* and *PUT* are pre-filled with sample data, so use **Try it out → Execute**.
+Swagger: **http://localhost:5043/swagger** · SQL Server on `127.0.0.1:1433`.
 
-```bash
-docker compose logs -f api   # follow logs
-docker compose down          # stop (add -v to delete the database)
-```
-
-- The database schema is created automatically on startup in the Development environment (EF Core migrations).
-- Local-only database credentials are in `docker-compose.yml` (override with the `SA_PASSWORD` environment variable). SQL Server is published on `127.0.0.1:1433` only.
-- After changing the API code, run `docker compose restart api`.
+- Dev env applies EF migrations on startup.
+- Bootstrap staff (local only): `staff@bankapp.local` / `Staff_Passw0rd!`.
+- Config via env vars (`ConnectionStrings__BankAppDb`, `Security__Jwt__SecurityKey` ≥ 32 bytes). Never commit real secrets.
 - Migrations: `./scripts/ef.sh migrations add <Name> --output-dir Migrations`.
 
-## Loans
+## 7. Tooling (no local .NET)
 
-Customers apply for loans; individual customers can only use individual loan types, corporate customers only corporate ones.
+All commands run in `mcr.microsoft.com/dotnet/sdk:10.0`.
 
-```
-LoanType (Segment)  1──N  LoanSubType (limits, rate)  1──N  LoanApplication  N──1  Customers (individual or corporate)
-```
-
-| Endpoint | Purpose |
+| Script | Purpose |
 |---|---|
-| `GET/POST /api/loan-types`, `POST /api/loan-types/{id}/sub-types` | List (paged, `?segment=`) and create loan types and sub types. Six sub types are seeded by the migration. |
-| `POST /api/loan-applications` | Apply for a loan. Response contains the calculated monthly payment. |
-| `GET /api/loan-applications` | Paged list, filters `customerId`, `status`; includes customer and loan type. |
-| `GET /api/loan-applications/calculate` | Monthly payment, total repayment and installment schedule, without applying. |
-| `POST /api/loan-applications/{id}/start-review`, `approve`, `reject`, `cancel` | Decision flow: Submitted → UnderReview → Approved / Rejected, or Cancelled while open. |
+| `scripts/dotnet.sh <args>` | dotnet CLI |
+| `scripts/ef.sh <args>` | dotnet-ef |
+| `scripts/test.sh [--project <p>]` | tests (mounts Docker socket for Testcontainers) |
 
-Calculation: equal installments, monthly interest = annual rate / 12 on the remaining balance. Taxes and fees are not included.
+VS Code: Dev Containers → *Reopen in Container* (`.devcontainer/`).
 
-## Users, security and sessions
+## 8. Tests
 
-**A customer is a user.** The user types form one inheritance chain, stored table-per-type:
-
-```
-Users (Core: login information only)            Email, PasswordHash, lockout, e-mail verification
-  └─ ApplicationUsers (this application)        Role, ban
-       └─ Customers                             CustomerNumber, address, ...
-            ├─ IndividualCustomers              name, national ID, ...
-            └─ CorporateCustomers               company name, tax number, ...
+```mermaid
+flowchart BT
+    A[BankingSystemCore.UnitTests<br/>83] --> B[Application.UnitTests<br/>402]
+    B --> C[Persistence.IntegrationTests<br/>152]
+    C --> D[WebApi.IntegrationTests<br/>138]
 ```
 
-Creating a customer is **one command, one transaction**: a single insert writes a row in every table of its chain, so the customer
-can log in at once. The customer id is the user id. Bank staff are plain `ApplicationUsers` with the `BankStaff` role. The role is never
-taken from a request: customers always get `Customer`, and staff accounts exist only through `POST /api/users/staff`.
-
-| Role | Can do |
-|---|---|
-| `BankStaff` | Everything: all customers, applications, decisions, loan types, user accounts (ban, unban). |
-| `Customer` | Only their own data: their record, their applications (apply, read, cancel). Browse loan types and calculate. |
-
-| Endpoint | Purpose |
-|---|---|
-| `POST /api/auth/login` | E-mail + password → access token (10 min) + refresh token (30 min). 5 wrong passwords lock the account for 15 minutes. |
-| `POST /api/auth/refresh` | Refresh token → a new pair. A refresh token works **once**; using an old one again ends the whole session. |
-| `POST /api/auth/logout` | Ends the session of the current token. |
-| `GET /api/auth/me` | Who the current token belongs to. |
-| `POST /api/auth/send-verification-email`, `POST /api/auth/verify-email` | E-mail verification (see below). |
-| `GET /api/users`, `POST /api/users/staff`, `POST /api/users/{id}/ban`, `POST /api/users/{id}/unban` | Staff only. |
-
-**Instant revocation.** Every access token carries a session id (`sid`). On every request the API checks in the database that the
-session is not revoked and that its user is active and not deleted, so a **ban, a logout or a deleted customer takes effect on the very
-next request**, not when the token expires. The price is one small query per request.
-
-**E-mail verification (prepared, not live).** `IEmailSender` is the abstraction; the default `LoggingEmailSender` only logs ("not sent").
-Tokens are random, stored only as a hash, valid 24 hours and usable once. `Security:EmailVerification:RequireVerifiedEmail` is `false`;
-turn it on once a real sender is registered after `AddSecurityServices`. In local development `Mailing:LogBody=true` writes the e-mail
-(with the token) to the API log so the flow can be tried: `docker compose logs api`.
-
-How it fits together:
-
-- `BankingSystemCore/Security`: `User` (login information only), JWT creation, PBKDF2 password hashing, `SecureToken`, `ICurrentUser`.
-- `BankingSystemCore/Mailing`: `IEmailSender`, `LoggingEmailSender`.
-- `BankingSystemCore/Application/Pipelines/Authorization`: `ISecuredRequest` + `AuthorizationBehavior`. Runs **before** validation and the
-  handler: not logged in → 401, wrong role → 403. A test fails if a new request is neither secured nor on the explicit "open" list.
-- Roles say *who may run* a request; `CustomerAccessPolicy` says *whose data* it may touch. A customer asking for somebody else's record
-  gets 404; acting for somebody else gets 403.
-- Concurrency: users and sessions have a row version, so a stale write (a login racing a ban) is refused with 409 instead of overwriting.
-- The first staff account is created at startup from `Security:BootstrapStaff:Email/Password` (set in `docker-compose.yml` for local use).
-  Remove those settings once it exists.
-- Settings: `Security:Jwt:SecurityKey` (at least 32 bytes) must come from the environment or a secret store, never from a committed file.
-
-Not included yet: rate limiting of the anonymous endpoints (login, refresh, verify-email), a real e-mail provider, password change / reset,
-two-factor authentication for staff, changing a customer's e-mail address.
-
-## Development Environment
-
-No local .NET SDK is required; everything runs in the `mcr.microsoft.com/dotnet/sdk:10.0` Docker image.
-
-### VS Code (IntelliSense, debugging)
-
-1. Install the **Dev Containers** extension (`ms-vscode-remote.remote-containers`).
-2. Open the folder and run **Dev Containers: Reopen in Container**.
-3. C# Dev Kit is installed inside the container and loads `BankApp.slnx` automatically.
-
-### Command line
+xUnit v3 (MTP) · Shouldly · NSubstitute · Testcontainers.MsSql · Respawn · Mvc.Testing. Integration tests use a real SQL Server, reset between tests.
 
 ```bash
-./scripts/dotnet.sh restore
-./scripts/dotnet.sh build
+./scripts/test.sh                                            # all (775)
+./scripts/dotnet.sh test --project tests/Application.UnitTests   # no Docker socket needed
 ```
 
-Both the dev container and the script mount the repository at `/src` and share the `bankapp-nuget-cache` Docker volume for NuGet packages, so they can be used interchangeably.
+## 9. Repository layout
 
-## Testing
-
-Test projects: `BankingSystemCore.UnitTests`, `Application.UnitTests`, `Persistence.IntegrationTests`, `WebApi.IntegrationTests`.
-
-Stack: xUnit v3 (Microsoft Testing Platform), Shouldly, NSubstitute, Testcontainers (SQL Server), Respawn.
-
-```bash
-./scripts/test.sh                                          # all tests
-./scripts/test.sh --project tests/Persistence.IntegrationTests
-./scripts/dotnet.sh test --project tests/Application.UnitTests   # unit tests only, no Docker socket
+```
+BankApp.slnx · docker-compose.yml · global.json
+scripts/   dotnet.sh  ef.sh  test.sh
+docs/      ARCHITECTURE_PRINCIPLES.md
+src/       BankingSystemCore  Domain  Application  Persistence  WebApi
+tests/     BankingSystemCore.UnitTests  Application.UnitTests
+           Persistence.IntegrationTests  WebApi.IntegrationTests
 ```
 
-- **Unit tests** mock the repositories and run in under a second.
-- **Integration tests** start one SQL Server container per run, build the real DI container (`AddApplicationServices` + `AddPersistenceServices`), send requests through MediatR, and empty the database before every test. The first run pulls the SQL Server image (~1.5 GB).
-- `test.sh` mounts the Docker socket into the SDK container so Testcontainers can start the database. Use `dotnet.sh` for everything else.
-- Write tests together with the code they cover (rule, validator, handler). Add HTTP-level tests (`WebApplicationFactory`) when controllers are added.
+## 10. Not implemented yet
 
-## Error Handling
-
-`ExceptionMiddleware` (registered first in `WebApi/Program.cs`) turns exceptions into `application/problem+json`:
-
-| Exception | HTTP status | Problem type |
-|---|---|---|
-| `BusinessException` | 400 | `urn:problem:business` |
-| `ValidationException` (errors grouped by property) | 400 | `urn:problem:validation` |
-| `NotFoundException` | 404 | `urn:problem:not-found` |
-| `AuthorizationException` | 403 | `urn:problem:authorization` |
-| anything else | 500 | `urn:problem:internal-server-error` (generic message, details only in the log) |
-
-FluentValidation failures are converted to the core `ValidationException` by `ValidationBehavior` in the Application layer, so the core has no dependency on FluentValidation.
+Rate limiting · caching · real e-mail provider · password change/reset · MFA for staff · e-mail change · audit log · JWT key rotation · loan/installment/payment lifecycle.

@@ -1,0 +1,19 @@
+{
+  "files.watcherExclude": {
+    "**/bin/**": true,
+    "**/obj/**": true,
+    "**/TestResults/**": true,
+    "**/.git/objects/**": true
+  },
+  "search.exclude": {
+    "**/bin": true,
+    "**/obj": true,
+    "**/TestResults": true
+  },
+  "files.exclude": {
+    "**/bin": true,
+    "**/obj": true
+  },
+  "git.repositoryScanMaxDepth": 1,
+  "git.autoRepositoryDetection": "openEditors"
+}

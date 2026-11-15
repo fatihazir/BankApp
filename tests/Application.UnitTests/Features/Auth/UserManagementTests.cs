@@ -222,7 +222,7 @@ public class UserManagementTests
     [Fact]
     public async Task CreateStaff_CreatesAVerifiedStaffUser_WithAHashedPassword()
     {
-        var handler = new CreateStaffUserCommandHandler(_f.Users, _f.Hasher, new Application.Features.Auth.Rules.AuthBusinessRules(_f.Users));
+        var handler = new CreateStaffUserCommandHandler(_f.Users, _f.Hasher, new Application.Features.Auth.Rules.AuthBusinessRules(_f.Users), _f.Time);
 
         var response = await handler.Handle(new CreateStaffUserCommand { Email = " New.Staff@Bank.test ", Password = AuthFixture.Password }, Ct);
 
@@ -238,7 +238,7 @@ public class UserManagementTests
     public async Task CreateStaff_WithARegisteredEmail_IsRefused()
     {
         _f.Users.AnyAsync(Arg.Any<Expression<Func<ApplicationUser, bool>>?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(true);
-        var handler = new CreateStaffUserCommandHandler(_f.Users, _f.Hasher, new Application.Features.Auth.Rules.AuthBusinessRules(_f.Users));
+        var handler = new CreateStaffUserCommandHandler(_f.Users, _f.Hasher, new Application.Features.Auth.Rules.AuthBusinessRules(_f.Users), _f.Time);
 
         await Should.ThrowAsync<BusinessException>(() => handler.Handle(new CreateStaffUserCommand { Email = "a@b.com", Password = AuthFixture.Password }, Ct));
         await _f.Users.DidNotReceiveWithAnyArgs().AddAsync(default!, Ct);

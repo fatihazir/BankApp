@@ -22,6 +22,7 @@ public static class StaffBootstrapper
         using IServiceScope scope = services.CreateScope();
         var users = scope.ServiceProvider.GetRequiredService<IApplicationUserRepository>();
         var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+        var time = scope.ServiceProvider.GetRequiredService<TimeProvider>();
         var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(StaffBootstrapper));
 
         if (await users.AnyAsync(u => u.Role == UserRole.BankStaff, withDeleted: true, cancellationToken: cancellationToken))
@@ -34,7 +35,7 @@ public static class StaffBootstrapper
             Role = UserRole.BankStaff,
             IsActive = true,
             EmailVerified = true,
-            EmailVerifiedDate = DateTime.UtcNow
+            EmailVerifiedDate = time.GetUtcNow().UtcDateTime
         }, cancellationToken);
 
         logger.LogWarning("The first bank staff user {Email} was created from configuration. Remove the bootstrap settings.", email);

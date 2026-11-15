@@ -22,12 +22,14 @@ public class CreateStaffUserCommandHandler : IRequestHandler<CreateStaffUserComm
     private readonly IApplicationUserRepository _users;
     private readonly IPasswordHasher _hasher;
     private readonly AuthBusinessRules _rules;
+    private readonly TimeProvider _time;
 
-    public CreateStaffUserCommandHandler(IApplicationUserRepository users, IPasswordHasher hasher, AuthBusinessRules rules)
+    public CreateStaffUserCommandHandler(IApplicationUserRepository users, IPasswordHasher hasher, AuthBusinessRules rules, TimeProvider time)
     {
         _users = users;
         _hasher = hasher;
         _rules = rules;
+        _time = time;
     }
 
     public async Task<CreatedStaffUserResponse> Handle(CreateStaffUserCommand request, CancellationToken cancellationToken)
@@ -39,7 +41,7 @@ public class CreateStaffUserCommandHandler : IRequestHandler<CreateStaffUserComm
         {
             Email = email, PasswordHash = _hasher.Hash(request.Password), Role = UserRole.BankStaff, IsActive = true,
             // Created by authorized staff, so the address is trusted.
-            EmailVerified = true, EmailVerifiedDate = DateTime.UtcNow
+            EmailVerified = true, EmailVerifiedDate = _time.GetUtcNow().UtcDateTime
         };
         await _users.AddAsync(user, cancellationToken);
 

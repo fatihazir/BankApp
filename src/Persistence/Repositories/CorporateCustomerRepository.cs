@@ -8,7 +8,7 @@ namespace Persistence.Repositories;
 public class CorporateCustomerRepository
     : EfRepositoryBase<CorporateCustomer, Guid, BankAppDbContext>, ICorporateCustomerRepository
 {
-    public CorporateCustomerRepository(BankAppDbContext context) : base(context)
+    public CorporateCustomerRepository(BankAppDbContext context, TimeProvider time) : base(context, time)
     {
     }
 }

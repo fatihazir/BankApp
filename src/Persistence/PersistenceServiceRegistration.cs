@@ -2,6 +2,7 @@ using Application.Services.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Persistence.Contexts;
 using Persistence.Repositories;
 
@@ -20,6 +21,9 @@ public static class PersistenceServiceRegistration
             options => options.UseSqlServer(connectionString),
             contextLifetime: ServiceLifetime.Scoped,
             optionsLifetime: ServiceLifetime.Scoped);
+
+        // Repositories stamp CreateDate/UpdateDate/DeleteDate with this clock. A host or a test may register its own first.
+        services.TryAddSingleton(TimeProvider.System);
 
         services.AddScoped<IIndividualCustomerRepository, IndividualCustomerRepository>();
         services.AddScoped<ICorporateCustomerRepository, CorporateCustomerRepository>();

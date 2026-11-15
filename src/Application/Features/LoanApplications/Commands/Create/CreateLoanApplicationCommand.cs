@@ -29,19 +29,22 @@ public class CreateLoanApplicationCommandHandler
     private readonly ILoanApplicationRepository _applications;
     private readonly LoanApplicationBusinessRules _rules;
     private readonly CustomerAccessPolicy _access;
+    private readonly TimeProvider _time;
 
     public CreateLoanApplicationCommandHandler(
         ICustomerRepository customers,
         ILoanSubTypeRepository subTypes,
         ILoanApplicationRepository applications,
         LoanApplicationBusinessRules rules,
-        CustomerAccessPolicy access)
+        CustomerAccessPolicy access,
+        TimeProvider time)
     {
         _customers = customers;
         _subTypes = subTypes;
         _applications = applications;
         _rules = rules;
         _access = access;
+        _time = time;
     }
 
     public async Task<CreatedLoanApplicationResponse> Handle(
@@ -87,6 +90,6 @@ public class CreateLoanApplicationCommandHandler
         return response;
     }
 
-    private static string NewApplicationNumber() =>
-        $"LA-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
+    private string NewApplicationNumber() =>
+        $"LA-{_time.GetUtcNow():yyyyMMdd}-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
 }

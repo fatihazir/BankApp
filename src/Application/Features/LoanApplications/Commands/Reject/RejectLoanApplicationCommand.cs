@@ -20,11 +20,13 @@ public class RejectLoanApplicationCommandHandler : IRequestHandler<RejectLoanApp
 {
     private readonly ILoanApplicationRepository _applications;
     private readonly LoanApplicationBusinessRules _rules;
+    private readonly TimeProvider _time;
 
-    public RejectLoanApplicationCommandHandler(ILoanApplicationRepository applications, LoanApplicationBusinessRules rules)
+    public RejectLoanApplicationCommandHandler(ILoanApplicationRepository applications, LoanApplicationBusinessRules rules, TimeProvider time)
     {
         _applications = applications;
         _rules = rules;
+        _time = time;
     }
 
     public async Task<LoanApplicationStatusResponse> Handle(
@@ -36,7 +38,7 @@ public class RejectLoanApplicationCommandHandler : IRequestHandler<RejectLoanApp
         _rules.StatusMustBe(application!, LoanApplicationStatus.Submitted, LoanApplicationStatus.UnderReview);
 
         application!.Status = LoanApplicationStatus.Rejected;
-        application.DecisionDate = DateTime.UtcNow;
+        application.DecisionDate = _time.GetUtcNow().UtcDateTime;
         application.DecisionReason = request.Reason;
 
         await _applications.UpdateAsync(application!, cancellationToken);

@@ -7,7 +7,7 @@ namespace Persistence.Repositories;
 
 public class UserSessionRepository : EfRepositoryBase<UserSession, Guid, BankAppDbContext>, IUserSessionRepository
 {
-    public UserSessionRepository(BankAppDbContext context) : base(context)
+    public UserSessionRepository(BankAppDbContext context, TimeProvider time) : base(context, time)
     {
     }
 }

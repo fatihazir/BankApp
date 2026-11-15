@@ -7,7 +7,7 @@ namespace Persistence.Repositories;
 
 public class LoanSubTypeRepository : EfRepositoryBase<LoanSubType, Guid, BankAppDbContext>, ILoanSubTypeRepository
 {
-    public LoanSubTypeRepository(BankAppDbContext context) : base(context)
+    public LoanSubTypeRepository(BankAppDbContext context, TimeProvider time) : base(context, time)
     {
     }
 }

@@ -89,7 +89,7 @@ public class CustomerAccessTests
                 Arg.Any<Func<IQueryable<IndividualCustomer>, IIncludableQueryable<IndividualCustomer, object?>>?>(),
                 Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new IndividualCustomer { FirstName = "Fatih" });
-        return (new GetByIdIndividualCustomerQueryHandler(repository, new IndividualCustomerBusinessRules(repository), user.Policy()), repository);
+        return (new GetByIdIndividualCustomerQueryHandler(repository, new IndividualCustomerBusinessRules(repository, TimeProvider.System), user.Policy()), repository);
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public class CustomerAccessTests
     {
         var repository = Substitute.For<IIndividualCustomerRepository>();
         var handler = new UpdateIndividualCustomerCommandHandler(
-            repository, new IndividualCustomerBusinessRules(repository), FakeCurrentUser.Customer(Guid.NewGuid()).Policy());
+            repository, new IndividualCustomerBusinessRules(repository, TimeProvider.System), FakeCurrentUser.Customer(Guid.NewGuid()).Policy());
 
         await Should.ThrowAsync<NotFoundException>(() => handler.Handle(new UpdateIndividualCustomerCommand { Id = Guid.NewGuid() }, Ct));
 
@@ -156,7 +156,7 @@ public class CustomerAccessTests
     public async Task Customer_CannotApplyOnBehalfOfSomebodyElse_403()
     {
         var handler = new CreateLoanApplicationCommandHandler(
-            _customers, _subTypes, _applications, Rules, FakeCurrentUser.Customer(Guid.NewGuid()).Policy());
+            _customers, _subTypes, _applications, Rules, FakeCurrentUser.Customer(Guid.NewGuid()).Policy(), TimeProvider.System);
 
         await Should.ThrowAsync<AuthorizationException>(() => handler.Handle(
             new CreateLoanApplicationCommand { CustomerId = Guid.NewGuid(), LoanSubTypeId = Guid.NewGuid(), RequestedAmount = 10, TermInMonths = 1 }, Ct));
@@ -187,7 +187,7 @@ public class CustomerAccessTests
     public async Task Customer_CannotCancelSomebodyElsesApplication_AndNothingIsSaved()
     {
         ApplicationOf(Guid.NewGuid());
-        var handler = new CancelLoanApplicationCommandHandler(_applications, Rules, FakeCurrentUser.Customer(Guid.NewGuid()).Policy());
+        var handler = new CancelLoanApplicationCommandHandler(_applications, Rules, FakeCurrentUser.Customer(Guid.NewGuid()).Policy(), TimeProvider.System);
 
         await Should.ThrowAsync<NotFoundException>(() => handler.Handle(new CancelLoanApplicationCommand { Id = Guid.NewGuid() }, Ct));
 
@@ -199,7 +199,7 @@ public class CustomerAccessTests
     {
         Guid own = Guid.NewGuid();
         ApplicationOf(own);
-        var handler = new CancelLoanApplicationCommandHandler(_applications, Rules, FakeCurrentUser.Customer(own).Policy());
+        var handler = new CancelLoanApplicationCommandHandler(_applications, Rules, FakeCurrentUser.Customer(own).Policy(), TimeProvider.System);
 
         (await handler.Handle(new CancelLoanApplicationCommand { Id = Guid.NewGuid() }, Ct)).Status.ShouldBe(LoanApplicationStatus.Cancelled);
     }

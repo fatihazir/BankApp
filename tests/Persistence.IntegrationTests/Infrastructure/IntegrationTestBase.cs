@@ -25,6 +25,9 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     /// <summary>The e-mails the application "sent" during the test.</summary>
     protected CapturingEmailSender Emails { get; } = new();
 
+    /// <summary>The clock of the application. It stands still until the test moves it.</summary>
+    protected TestClock Clock { get; } = new();
+
     protected IntegrationTestBase(SqlServerFixture database, Dictionary<string, string?>? extraSettings = null)
     {
         _database = database;
@@ -51,6 +54,10 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         // There is no HTTP request in these tests, so the logged-in user is a test double.
         services.RemoveAll<ICurrentUser>();
         services.AddSingleton<ICurrentUser>(CurrentUser);
+
+        // The application reads time from this clock only, so a test can move it.
+        services.RemoveAll<TimeProvider>();
+        services.AddSingleton<TimeProvider>(Clock);
 
         // No mail server in tests: the e-mails are kept so the tests can read the links.
         services.RemoveAll<IEmailSender>();

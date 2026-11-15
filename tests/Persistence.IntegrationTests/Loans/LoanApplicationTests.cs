@@ -341,7 +341,7 @@ public class LoanApplicationTests(SqlServerFixture database) : IntegrationTestBa
     {
         Guid customerId = await NewIndividualAsync();
         await Send(Apply(customerId, LoanSeedData.PersonalLoanId));
-        await Task.Delay(20, TestContext.Current.CancellationToken);
+        Clock.Advance(TimeSpan.FromSeconds(1));
         Guid newest = (await Send(Apply(customerId, LoanSeedData.AutoLoanId, 100_000, 24))).Id;
 
         (await Send(new GetListLoanApplicationQuery())).Items[0].Id.ShouldBe(newest);

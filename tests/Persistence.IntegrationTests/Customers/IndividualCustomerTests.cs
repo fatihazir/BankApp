@@ -64,6 +64,24 @@ public class IndividualCustomerTests(SqlServerFixture database) : IntegrationTes
     }
 
     [Fact]
+    public async Task TheDates_ComeFromTheClock_OnCreateUpdateAndDelete()
+    {
+        var created = new DateTimeOffset(2030, 1, 1, 10, 0, 0, TimeSpan.Zero);
+        Clock.Now = created;
+        Guid id = (await Send(TestData.IndividualCreate())).Id;
+
+        Clock.Advance(TimeSpan.FromDays(1));
+        await Send(UpdateFor(id));
+
+        Clock.Advance(TimeSpan.FromDays(1));
+        await Send(new DeleteIndividualCustomerCommand { Id = id });
+
+        var row = await UsingDbContext(db => db.IndividualCustomers.AsNoTracking().SingleAsync(c => c.Id == id));
+        (row.CreateDate, row.UpdateDate, row.DeleteDate).ShouldBe(
+            (created.UtcDateTime, created.AddDays(1).UtcDateTime, created.AddDays(2).UtcDateTime));
+    }
+
+    [Fact]
     public async Task Update_ChangesFields_ButKeepsCustomerNumber()
     {
         var created = await Send(TestData.IndividualCreate());

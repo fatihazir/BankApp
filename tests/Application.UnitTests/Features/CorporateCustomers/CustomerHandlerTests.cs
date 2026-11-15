@@ -27,7 +27,7 @@ public class CorporateCustomerHandlerTests
 
     public CorporateCustomerHandlerTests()
     {
-        _rules = new CorporateCustomerBusinessRules(_repository);
+        _rules = new CorporateCustomerBusinessRules(_repository, TimeProvider.System);
 
         // By default a customer has no live sessions.
         _f.Sessions.GetListAsync(

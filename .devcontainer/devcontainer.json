@@ -1,0 +1,26 @@
+{
+  "name": "BankApp (.NET 10)",
+  "image": "mcr.microsoft.com/dotnet/sdk:10.0",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/src,type=bind",
+  "workspaceFolder": "/src",
+  "mounts": [
+    "source=bankapp-nuget-cache,target=/root/.nuget/packages,type=volume"
+  ],
+  "containerEnv": {
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+    "DOTNET_NOLOGO": "1"
+  },
+  "forwardPorts": [5043, 7116],
+  "postCreateCommand": "dotnet restore BankApp.slnx",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csdevkit",
+        "ms-dotnettools.csharp"
+      ],
+      "settings": {
+        "dotnet.defaultSolution": "BankApp.slnx"
+      }
+    }
+  }
+}

@@ -1,0 +1,248 @@
+# BankApp – Loan Module
+
+.NET 10 · C# · Clean Architecture · CQRS (MediatR) · EF Core 10 / SQL Server · JWT + server-side sessions.
+
+Design rules: [docs/ARCHITECTURE_PRINCIPLES.md](docs/ARCHITECTURE_PRINCIPLES.md)
+
+## 1. Layers
+
+```mermaid
+flowchart LR
+    WebApi --> Application
+    WebApi --> Persistence
+    Persistence --> Application
+    Application --> Domain
+    Domain --> Core[BankingSystemCore]
+    Application --> Core
+```
+
+| Project | Content |
+|---|---|
+| `BankingSystemCore` | Reusable kernel: `Entity<T>`, generic repository + EF impl, `Paginate<T>`, exceptions + middleware, JWT, hashing, `ICurrentUser`, mailing, `AuthorizationBehavior`. No product logic. |
+| `Domain` | Entities + enums only. |
+| `Application` | Commands, queries, handlers, FluentValidation, Mapperly mappers, rules, repository ports. |
+| `Persistence` | `DbContext`, entity configurations, repositories, migrations. |
+| `WebApi` | Controllers, auth setup, OpenAPI/Swagger, composition root. |
+
+## 2. Request pipeline
+
+```mermaid
+flowchart LR
+    C[Client] --> EM[ExceptionMiddleware]
+    EM --> JWT[JwtBearer]
+    JWT --> SV{{ISessionValidator<br/>every request}}
+    SV --> Ctl[Controller]
+    Ctl --> M[MediatR]
+    M --> AB[AuthorizationBehavior<br/>401 / 403]
+    AB --> VB[ValidationBehavior<br/>400]
+    VB --> H[Handler]
+    H --> R[Rules<br/>400 / 404]
+    H --> Repo[(Repository)]
+```
+
+- `ISecuredRequest` declares allowed roles (explicit interface → not in JSON/Swagger). Empty = any logged-in user.
+- Ownership (`CustomerAccessPolicy`): other customer's record → 404, acting for another → 403.
+- `SecurityContractTests`: every request is secured or on the explicit open list; roles pinned per request.
+
+## 3. Data model
+
+### 3.1 User chain (table-per-type, one insert writes the whole chain)
+
+```mermaid
+classDiagram
+    direction TB
+    class User["Users (Core)"] {
+        Guid Id
+        Email
+        PasswordHash
+        IsActive
+        FailedLoginCount
+        LockoutEnd
+        EmailVerified
+        RowVersion
+    }
+    class ApplicationUser["ApplicationUsers"] {
+        Role
+        BannedDate
+        BanReason
+    }
+    class Customer["Customers"] {
+        CustomerNumber
+        PhoneNumber
+        Address / City / Country
+        CreditScore
+    }
+    class IndividualCustomer["IndividualCustomers"] {
+        FirstName / LastName
+        NationalId
+        DateOfBirth
+        EmploymentStatus
+        MonthlyIncome
+    }
+    class CorporateCustomer["CorporateCustomers"] {
+        CompanyName
+        TaxNumber / TaxOffice
+        AnnualRevenue
+        AuthorizedPersonName
+    }
+    class UserSession["UserSessions"] {
+        RefreshTokenHash
+        RefreshTokenExpiresAt
+        PreviousRefreshTokenHash
+        RevokedDate
+        RowVersion
+    }
+    User <|-- ApplicationUser
+    ApplicationUser <|-- Customer
+    Customer <|-- IndividualCustomer
+    Customer <|-- CorporateCustomer
+    User "1" --> "*" UserSession
+```
+
+`customerId == userId == JWT sub`. Role is never read from a request: customers get `Customer`; staff only via `POST /api/users/staff`.
+
+### 3.2 Loans
+
+```mermaid
+erDiagram
+    LoanType ||--o{ LoanSubType : has
+    LoanSubType ||--o{ LoanApplication : "applied for"
+    Customers ||--o{ LoanApplication : submits
+    LoanType { enum Segment }
+    LoanSubType { decimal MinAmount_MaxAmount int MinTerm_MaxTermInMonths decimal AnnualInterestRate }
+    LoanApplication { decimal RequestedAmount int TermInMonths decimal AnnualInterestRate enum Status decimal ApprovedAmount }
+```
+
+Segment rule: individual customers → individual loan types; corporate → corporate.
+
+### 3.3 Application status
+
+```mermaid
+stateDiagram-v2
+    [*] --> Submitted
+    Submitted --> UnderReview: start-review (staff)
+    UnderReview --> Approved: approve (staff)
+    UnderReview --> Rejected: reject (staff)
+    Submitted --> Cancelled: cancel
+    UnderReview --> Cancelled: cancel
+    Approved --> [*]
+    Rejected --> [*]
+    Cancelled --> [*]
+```
+
+Payment: annuity, `monthly rate = annual rate / 12`, no taxes/fees.
+
+## 4. Authentication and sessions
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant A as API
+    participant DB as DB
+    C->>A: POST /auth/login
+    A->>DB: verify password, lockout, create UserSession
+    A-->>C: access JWT (10 min, sid) + refresh (30 min)
+    C->>A: request + access JWT
+    A->>DB: session active? user active & not deleted?
+    A-->>C: 200 / 401
+    C->>A: POST /auth/refresh
+    A->>DB: rotate refresh hash
+    A-->>C: new pair
+    Note over A,DB: Reused old refresh token → session revoked
+    C->>A: ban / logout / delete
+    A->>DB: revoke session(s)
+    Note over C,A: Next request with old JWT → 401
+```
+
+| Mechanism | Value |
+|---|---|
+| Access token | JWT, 10 min, claims `sub`, `sid`, role |
+| Refresh token | opaque, 30 min, single-use, SHA-256 hash stored |
+| Password hash | PBKDF2-SHA256, 600k iterations (configurable) |
+| Lockout | 5 failures → 15 min |
+| Revocation | per-request session check → ban/logout/delete effective immediately |
+| Concurrency | `RowVersion` on `User`, `UserSession` → stale write = 409 |
+| E-mail verification | `IEmailSender` + `LoggingEmailSender`; token 24 h, single-use, hashed; `RequireVerifiedEmail=false` |
+
+## 5. API
+
+| Area | Endpoints | Access |
+|---|---|---|
+| Auth | `POST /api/auth/login` `refresh` `logout` · `GET /api/auth/me` · `POST /api/auth/send-verification-email` `verify-email` | login/refresh/verify open |
+| Users | `GET /api/users` · `POST /api/users/staff` · `POST /api/users/{id}/ban` `unban` | staff |
+| Individual customers | `POST` `GET` `GET {id}` `PUT {id}` `DELETE {id}` `/api/individual-customers` | create/list/delete staff; get/update staff + own |
+| Corporate customers | same under `/api/corporate-customers` | same |
+| Loan types | `GET/POST /api/loan-types` · `POST /api/loan-types/{id}/sub-types` | list: any; create: staff |
+| Loan applications | `POST` `GET` `GET {id}` `/api/loan-applications` · `GET .../calculate` · `POST .../{id}/cancel` | staff + own |
+| Decisions | `POST /api/loan-applications/{id}/start-review` `approve` `reject` | staff |
+
+All lists are paged. Errors: `application/problem+json`.
+
+| Exception | HTTP | `type` |
+|---|---|---|
+| Business | 400 | `urn:problem:business` |
+| Validation | 400 | `urn:problem:validation` |
+| Authentication | 401 | `urn:problem:authentication` |
+| Authorization | 403 | `urn:problem:authorization` |
+| NotFound | 404 | `urn:problem:not-found` |
+| Conflict / `DbUpdateConcurrencyException` | 409 | `urn:problem:conflict` |
+| other | 500 | `urn:problem:internal-server-error` |
+
+## 6. Run
+
+```bash
+docker compose up -d                 # SQL Server + API
+docker compose logs -f api
+docker compose restart api           # after code changes
+docker compose down [-v]             # -v drops the database
+```
+
+Swagger: **http://localhost:5043/swagger** · SQL Server on `127.0.0.1:1433`.
+
+- Dev env applies EF migrations on startup.
+- Bootstrap staff (local only): `staff@bankapp.local` / `Staff_Passw0rd!`.
+- Config via env vars (`ConnectionStrings__BankAppDb`, `Security__Jwt__SecurityKey` ≥ 32 bytes). Never commit real secrets.
+- Migrations: `./scripts/ef.sh migrations add <Name> --output-dir Migrations`.
+
+## 7. Tooling (no local .NET)
+
+All commands run in `mcr.microsoft.com/dotnet/sdk:10.0`.
+
+| Script | Purpose |
+|---|---|
+| `scripts/dotnet.sh <args>` | dotnet CLI |
+| `scripts/ef.sh <args>` | dotnet-ef |
+| `scripts/test.sh [--project <p>]` | tests (mounts Docker socket for Testcontainers) |
+
+VS Code: Dev Containers → *Reopen in Container* (`.devcontainer/`).
+
+## 8. Tests
+
+```mermaid
+flowchart BT
+    A[BankingSystemCore.UnitTests<br/>83] --> B[Application.UnitTests<br/>402]
+    B --> C[Persistence.IntegrationTests<br/>152]
+    C --> D[WebApi.IntegrationTests<br/>138]
+```
+
+xUnit v3 (MTP) · Shouldly · NSubstitute · Testcontainers.MsSql · Respawn · Mvc.Testing. Integration tests use a real SQL Server, reset between tests.
+
+```bash
+./scripts/test.sh                                            # all (775)
+./scripts/dotnet.sh test --project tests/Application.UnitTests   # no Docker socket needed
+```
+
+## 9. Repository layout
+
+```
+BankApp.slnx · docker-compose.yml · global.json
+scripts/   dotnet.sh  ef.sh  test.sh
+docs/      ARCHITECTURE_PRINCIPLES.md
+src/       BankingSystemCore  Domain  Application  Persistence  WebApi
+tests/     BankingSystemCore.UnitTests  Application.UnitTests
+           Persistence.IntegrationTests  WebApi.IntegrationTests
+```
+
+## 10. Not implemented yet
+
+Rate limiting · caching · real e-mail provider · password change/reset · MFA for staff · e-mail change · audit log · JWT key rotation · loan/installment/payment lifecycle.

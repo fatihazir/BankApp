@@ -2,7 +2,10 @@
 
 .NET 10 · C# · Clean Architecture · CQRS (MediatR) · EF Core 10 / SQL Server · JWT + server-side sessions.
 
-Design rules: [docs/ARCHITECTURE_PRINCIPLES.md](docs/ARCHITECTURE_PRINCIPLES.md)
+| Document | For |
+|---|---|
+| [docs/PROJECT_BOOTSTRAP.md](docs/PROJECT_BOOTSTRAP.md) | Blueprint: give it to an agent or a teammate to build the same skeleton for any product |
+| [docs/ARCHITECTURE_PRINCIPLES.md](docs/ARCHITECTURE_PRINCIPLES.md) | Domain-free design rules |
 
 ## 1. Layers
 

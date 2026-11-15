@@ -1,0 +1,51 @@
+# Local development only: SQL Server + the API (Swagger at http://localhost:5043/swagger).
+#   docker compose up -d        start
+#   docker compose logs -f api  follow API logs
+#   docker compose down         stop (add -v to also delete the database)
+services:
+  sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SA_PASSWORD:-Dev_Passw0rd!}"
+    ports:
+      - "127.0.0.1:1433:1433"   # reachable from this machine only
+    volumes:
+      - bankapp-sql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  api:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    working_dir: /src
+    command: dotnet run --project src/WebApi --no-launch-profile
+    depends_on:
+      sql:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      # Local development only. Use real secrets (and remove the bootstrap settings) anywhere else.
+      Security__Jwt__SecurityKey: "${JWT_KEY:-dev-only-signing-key-change-me-0123456789-abcdef}"
+      # Development only: the verification e-mail (with its token) is written to the log because no mail server exists yet.
+      Mailing__LogBody: "true"
+      Security__BootstrapStaff__Email: "${STAFF_EMAIL:-staff@bankapp.local}"
+      Security__BootstrapStaff__Password: "${STAFF_PASSWORD:-Staff_Passw0rd!}"
+      ConnectionStrings__BankAppDb: "Server=sql;Database=BankApp;User Id=sa;Password=${SA_PASSWORD:-Dev_Passw0rd!};TrustServerCertificate=True"
+    ports:
+      - "5043:8080"
+    volumes:
+      - .:/src
+      - bankapp-nuget-cache:/root/.nuget/packages
+
+volumes:
+  bankapp-sql-data:
+  bankapp-nuget-cache:
+    external: true
+    name: bankapp-nuget-cache

@@ -227,7 +227,7 @@ Authorization → Validation → (Logging / Transaction / Caching, if present) �
 3. The API is described by a generated OpenAPI document; interactive documentation is generated from it. Every request body has a realistic example.
 4. Authentication is declared in the document (bearer scheme) so tools can authorize.
 5. List endpoints share one paging contract (index, size, total, pages, has-next, has-previous, items).
-6. Breaking changes require a new API version. Additive changes do not.
+6. **The version is part of the URL from the first release** (`/api/v0/...`); an unversioned URL is not served. Breaking changes require a new version. Additive changes do not.
 7. Input is trusted nowhere: IDs from the route are verified against the caller's access before use.
 
 ---
@@ -288,7 +288,16 @@ These are not present by default. When added, they MUST follow these constraints
 - Metrics and distributed tracing through a vendor-neutral standard.
 - Never log secrets, tokens, credential hashes, or full personal data.
 
-### 12.4 Background work
+### 12.4 Auditing
+
+- Every command that changes state is audited: who (id, e-mail, role), what (a stable action name), to what (type, id), when, from where, and a short safe note. Security events (login, refusal, lockout, token reuse) are audited too.
+- It is declared on the request (an attribute) and written by one pipeline behavior, not by each handler. A contract test fails when a command is neither audited nor on a short, explained exception list.
+- The trail never holds secrets or personal data (passwords, tokens, national IDs). Notes are written by the request itself, never copied from the payload.
+- Failed requests write nothing; attempts anybody can send (unknown logins) are not stored, or the table is a denial-of-service target.
+- Rows have no foreign keys, are not updated or deleted by the application, and are read through a staff-only endpoint.
+- The entry is written after the change is saved. A broken audit store must not turn a finished action into an error: log it at Critical level with every field.
+
+### 12.5 Background work
 
 - Long or retryable work runs outside the request, triggered by a persisted message or job, never by fire-and-forget inside a handler.
 - Jobs are idempotent; retries are safe.

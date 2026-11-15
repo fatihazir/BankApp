@@ -99,7 +99,7 @@ classDiagram
     User "1" --> "*" UserSession
 ```
 
-`customerId == userId == JWT sub`. Role is never read from a request: customers get `Customer`; staff only via `POST /api/users/staff`.
+`customerId == userId == JWT sub`. Role is never read from a request: customers get `Customer`; staff only via `POST /api/v0/users/staff`.
 
 ### 3.2 Loans
 
@@ -168,13 +168,17 @@ sequenceDiagram
 
 | Area | Endpoints | Access |
 |---|---|---|
-| Auth | `POST /api/auth/login` `refresh` `logout` · `GET /api/auth/me` · `POST /api/auth/send-verification-email` `verify-email` | login/refresh/verify open |
-| Users | `GET /api/users` · `POST /api/users/staff` · `POST /api/users/{id}/ban` `unban` | staff |
-| Individual customers | `POST` `GET` `GET {id}` `PUT {id}` `DELETE {id}` `/api/individual-customers` | create/list/delete staff; get/update staff + own |
-| Corporate customers | same under `/api/corporate-customers` | same |
-| Loan types | `GET/POST /api/loan-types` · `POST /api/loan-types/{id}/sub-types` | list: any; create: staff |
-| Loan applications | `POST` `GET` `GET {id}` `/api/loan-applications` · `GET .../calculate` · `POST .../{id}/cancel` | staff + own |
-| Decisions | `POST /api/loan-applications/{id}/start-review` `approve` `reject` | staff |
+| Auth | `POST /api/v0/auth/login` `refresh` `logout` · `GET /api/v0/auth/me` · `POST /api/v0/auth/send-verification-email` `verify-email` | login/refresh/verify open |
+| Users | `GET /api/v0/users` · `POST /api/v0/users/staff` · `POST /api/v0/users/{id}/ban` `unban` | staff |
+| Individual customers | `POST` `GET` `GET {id}` `PUT {id}` `DELETE {id}` `/api/v0/individual-customers` | create/list/delete staff; get/update staff + own |
+| Corporate customers | same under `/api/v0/corporate-customers` | same |
+| Loan types | `GET/POST /api/v0/loan-types` · `POST /api/v0/loan-types/{id}/sub-types` | list: any; create: staff |
+| Loan applications | `POST` `GET` `GET {id}` `/api/v0/loan-applications` · `GET .../calculate` · `POST .../{id}/cancel` | staff + own |
+| Decisions | `POST /api/v0/loan-applications/{id}/start-review` `approve` `reject` | staff |
+| Audit trail | `GET /api/v0/audit-logs` (filters: `actorUserId` `targetId` `action` `succeeded` `from` `to`) | staff |
+| Health | `GET /health/live` · `GET /health/ready` (database) | anonymous |
+
+The API is **version 0**: the version is part of the URL, an unversioned URL is a 404, and every response carries `api-supported-versions`. One OpenAPI document per version: `/openapi/v0.json`.
 
 All lists are paged. Errors: `application/problem+json`.
 
@@ -185,8 +189,33 @@ All lists are paged. Errors: `application/problem+json`.
 | Authentication | 401 | `urn:problem:authentication` |
 | Authorization | 403 | `urn:problem:authorization` |
 | NotFound | 404 | `urn:problem:not-found` |
-| Conflict / `DbUpdateConcurrencyException` | 409 | `urn:problem:conflict` |
+| Conflict: a concurrent change (`DbUpdateConcurrencyException`) or a duplicate unique value two requests created at once | 409 | `urn:problem:conflict` |
+| TooManyRequests (rate limit, with `Retry-After`) | 429 | `urn:problem:rate-limit` |
 | other | 500 | `urn:problem:internal-server-error` |
+
+## 5a. Host hardening and operations
+
+Closed by default; everything is opened through configuration (environment variables use `__`, e.g. `Cors__AllowedOrigins__0`).
+
+| Area | Behavior | Settings |
+|---|---|---|
+| Rate limit | Login, refresh and verify-email: per client address, fixed window. 429 problem+json with `Retry-After`. | `RateLimiting:Enabled` (true), `RateLimiting:AnonymousAuth:PermitLimit` (10), `WindowSeconds` (60) |
+| Client address | `X-Forwarded-For/Proto/Host` are read **only** from listed proxies. Without a list only a proxy on the same machine is trusted, and the rate limit sees the proxy, not the client. | `ForwardedHeaders:KnownProxies`, `ForwardedHeaders:KnownNetworks` (CIDR) |
+| HTTPS | HTTPS redirection and HSTS (1 year, subdomains) outside development. | – |
+| CORS | No origin is allowed unless listed. | `Cors:AllowedOrigins` |
+| Response headers | `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Cache-Control: no-store`, strict `Content-Security-Policy` (not on the Swagger page). No `Server` header. | – |
+| Health | `/health/live` (process), `/health/ready` (database). Status text only. | – |
+| Sessions | A background worker deletes sessions that ended more than 7 days ago, in batches. | `Security:SessionCleanup:Enabled`, `Interval` (01:00:00), `RetentionDays` (7), `BatchSize` (500) |
+
+Account lockout (5 wrong passwords, 15 minutes) stops password guessing; the rate limit keeps one address from locking other people's accounts at speed. A distributed attacker can still lock accounts slowly: a CAPTCHA or an unlock mail is the usual next step.
+
+## 5b. Audit trail
+
+Every command that changes state is marked `[Audit("Action", "TargetType")]`; after it succeeds, the pipeline writes one row to `AuditLogs`: actor (id, e-mail, role), action, target (type, id), a short safe note (a reason, an amount), IP address, trace id and the time. Logins are recorded as well: success, refused password, lockout, reused refresh token. A failed request writes nothing. Passwords, tokens and national IDs never reach the trail.
+
+- A test fails when a new command has neither `[Audit]` nor a place on the short, explained exception list.
+- The rows have no foreign keys: the trail outlives deleted users and customers. They are never updated or deleted by the application; keep or archive them as your retention rules say.
+- The row is written after the change is saved. If the store is down, the action still stands and the entry is logged at Critical level with all its fields.
 
 ## 6. Run
 
@@ -197,7 +226,7 @@ docker compose restart api           # after code changes
 docker compose down [-v]             # -v drops the database
 ```
 
-Swagger: **http://localhost:5043/swagger** · SQL Server on `127.0.0.1:1433`.
+Swagger: **http://localhost:5043/swagger** (reads `/openapi/v0.json`) · SQL Server on `127.0.0.1:1433`.
 
 - Dev env applies EF migrations on startup.
 - Bootstrap staff (local only): `staff@bankapp.local` / `Staff_Passw0rd!`.
@@ -220,9 +249,9 @@ VS Code: Dev Containers → *Reopen in Container* (`.devcontainer/`).
 
 ```mermaid
 flowchart BT
-    A[BankingSystemCore.UnitTests<br/>83] --> B[Application.UnitTests<br/>396]
-    B --> C[Persistence.IntegrationTests<br/>91]
-    C --> D[WebApi.IntegrationTests<br/>136]
+    A[BankingSystemCore.UnitTests<br/>95] --> B[Application.UnitTests<br/>414]
+    B --> C[Persistence.IntegrationTests<br/>108]
+    C --> D[WebApi.IntegrationTests<br/>160]
 ```
 
 xUnit v3 (MTP) · Shouldly · NSubstitute · Testcontainers.MsSql · Respawn · Mvc.Testing. Integration tests use a real SQL Server, reset between tests.
@@ -230,7 +259,7 @@ xUnit v3 (MTP) · Shouldly · NSubstitute · Testcontainers.MsSql · Respawn · 
 Rule: a behavior is asserted at the lowest level that can prove it. Database tests cover only what needs the real engine (queries, constraints, persisted state), HTTP tests only what needs the real host (routing, status codes, auth wiring). See [docs/ARCHITECTURE_PRINCIPLES.md](docs/ARCHITECTURE_PRINCIPLES.md) §11.
 
 ```bash
-./scripts/test.sh                                            # all (706)
+./scripts/test.sh                                            # all (777)
 ./scripts/dotnet.sh test --project tests/Application.UnitTests   # no Docker socket needed
 ```
 
@@ -247,4 +276,6 @@ tests/     BankingSystemCore.UnitTests  Application.UnitTests
 
 ## 10. Not implemented yet
 
-Rate limiting · caching · real e-mail provider · password change/reset · MFA for staff · e-mail change · audit log · JWT key rotation · loan/installment/payment lifecycle.
+Caching · real e-mail provider · password change/reset · MFA for staff · e-mail change · JWT key rotation · loan/installment/payment lifecycle · national ID encryption/masking.
+
+Before going live: a Dockerfile and a CI/CD pipeline (GitHub Actions), and the production values of the settings above.

@@ -14,6 +14,7 @@ public sealed class TestCurrentUser : ICurrentUser
     public string? Email { get; private set; } = "test@bank.test";
     public Guid? SessionId { get; private set; } = Guid.NewGuid();
     public IReadOnlyCollection<string> Roles { get; private set; } = [BankRoles.BankStaff];
+    public string? IpAddress => "203.0.113.7";
 
     public bool IsInRole(string role) => Roles.Contains(role);
 

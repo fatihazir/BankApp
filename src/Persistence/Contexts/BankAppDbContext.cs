@@ -28,6 +28,8 @@ public class BankAppDbContext : DbContext
 
     public DbSet<UserSession> UserSessions => Set<UserSession>();
 
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(BankAppDbContext).Assembly);

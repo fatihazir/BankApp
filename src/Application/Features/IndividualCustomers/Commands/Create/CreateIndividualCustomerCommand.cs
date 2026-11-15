@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Services.Security;
 using BankingSystemCore.Application.Pipelines.Authorization;
 using Application.Features.IndividualCustomers.Profiles;
@@ -11,6 +12,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.Features.IndividualCustomers.Commands.Create;
 
+[Audit("Customer.Individual.Create", "IndividualCustomer")]
 public class CreateIndividualCustomerCommand : IRequest<CreatedIndividualCustomerResponse>, ISecuredRequest
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.StaffOnly;

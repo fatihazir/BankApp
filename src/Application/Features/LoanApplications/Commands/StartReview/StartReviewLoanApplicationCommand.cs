@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Services.Security;
 using BankingSystemCore.Application.Pipelines.Authorization;
 using Application.Features.LoanApplications.Profiles;
@@ -8,6 +9,7 @@ using MediatR;
 
 namespace Application.Features.LoanApplications.Commands.StartReview;
 
+[Audit("LoanApplication.StartReview", "LoanApplication")]
 public class StartReviewLoanApplicationCommand : IRequest<LoanApplicationStatusResponse>, ISecuredRequest
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.StaffOnly;

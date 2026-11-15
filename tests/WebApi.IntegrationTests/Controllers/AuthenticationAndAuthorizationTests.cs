@@ -121,6 +121,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
     [InlineData("GET", "/api/v0/loan-applications/calculate")]
     [InlineData("POST", "/api/v0/users/staff")]
     [InlineData("GET", "/api/v0/auth/me")]
+    [InlineData("GET", "/api/v0/audit-logs")]
     public async Task EveryProtectedEndpoint_Returns401_WithoutAToken(string method, string url)
     {
         var request = new HttpRequestMessage(new HttpMethod(method), url);
@@ -253,7 +254,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
             ("GET", "/api/v0/individual-customers"), ("GET", "/api/v0/corporate-customers"), ("POST", "/api/v0/individual-customers"),
             ("POST", "/api/v0/corporate-customers"), ("DELETE", $"/api/v0/individual-customers/{fatih.Id}"),
             ("POST", "/api/v0/loan-types"), ("POST", $"/api/v0/loan-types/{LoanSeedData.IndividualLoanTypeId}/sub-types"),
-            ("POST", "/api/v0/users/staff"), ("POST", $"/api/v0/loan-applications/{Guid.NewGuid()}/approve")
+            ("POST", "/api/v0/users/staff"), ("GET", "/api/v0/audit-logs"), ("POST", $"/api/v0/loan-applications/{Guid.NewGuid()}/approve")
         })
         {
             var request = new HttpRequestMessage(new HttpMethod(method), url);

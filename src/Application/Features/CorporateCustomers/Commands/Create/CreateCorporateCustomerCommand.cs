@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Services.Security;
 using BankingSystemCore.Application.Pipelines.Authorization;
 using Application.Features.CorporateCustomers.Profiles;
@@ -11,6 +12,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.Features.CorporateCustomers.Commands.Create;
 
+[Audit("Customer.Corporate.Create", "CorporateCustomer")]
 public class CreateCorporateCustomerCommand : IRequest<CreatedCorporateCustomerResponse>, ISecuredRequest
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.StaffOnly;

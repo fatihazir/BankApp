@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Features.Auth.Rules;
 using Application.Services.Repositories;
 using Application.Services.Security;
@@ -9,6 +10,7 @@ using MediatR;
 namespace Application.Features.Users.Commands.CreateStaff;
 
 /// <summary>Bank staff create accounts for new bank staff.</summary>
+[Audit("User.CreateStaff", "User")]
 public class CreateStaffUserCommand : IRequest<CreatedStaffUserResponse>, ISecuredRequest
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.StaffOnly;

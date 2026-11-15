@@ -18,7 +18,7 @@ public class LoginTests
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private LoginCommandHandler Handler() => new(_f.Users, _f.Hasher, _f.Issuer, _f.Time, _f.EmailOptionsAccessor);
+    private LoginCommandHandler Handler() => new(_f.Users, _f.Hasher, _f.Issuer, _f.Time, _f.EmailOptionsAccessor, _f.Audit);
 
     private static LoginCommand Login(string password = AuthFixture.Password, string email = "Staff@Bank.test ") =>
         new() { Email = email, Password = password };

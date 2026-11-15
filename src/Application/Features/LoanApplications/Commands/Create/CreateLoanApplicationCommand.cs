@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Services.Security;
 using BankingSystemCore.Application.Pipelines.Authorization;
 using Application.Features.LoanApplications.Profiles;
@@ -10,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.LoanApplications.Commands.Create;
 
+[Audit("LoanApplication.Create", "LoanApplication")]
 public class CreateLoanApplicationCommand : IRequest<CreatedLoanApplicationResponse>, ISecuredRequest
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.StaffAndCustomer;

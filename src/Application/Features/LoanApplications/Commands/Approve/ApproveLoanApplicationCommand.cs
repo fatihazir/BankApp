@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Services.Security;
 using BankingSystemCore.Application.Pipelines.Authorization;
 using Application.Features.LoanApplications.Profiles;
@@ -8,9 +9,12 @@ using MediatR;
 
 namespace Application.Features.LoanApplications.Commands.Approve;
 
-public class ApproveLoanApplicationCommand : IRequest<LoanApplicationStatusResponse>, ISecuredRequest
+[Audit("LoanApplication.Approve", "LoanApplication")]
+public class ApproveLoanApplicationCommand : IRequest<LoanApplicationStatusResponse>, ISecuredRequest, IAuditDetail
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.StaffOnly;
+
+    string? IAuditDetail.AuditDetail => $"Approved amount {ApprovedAmount}" + (string.IsNullOrWhiteSpace(Reason) ? "" : $". {Reason}");
 
     public Guid Id { get; set; }
     public decimal ApprovedAmount { get; set; }

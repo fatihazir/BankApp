@@ -37,6 +37,7 @@ public static class PersistenceServiceRegistration
         services.AddScoped<ILoanApplicationRepository, LoanApplicationRepository>();
         services.AddScoped<IApplicationUserRepository, ApplicationUserRepository>();
         services.AddScoped<IUserSessionRepository, UserSessionRepository>();
+        services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 
         return services;
     }

@@ -1,5 +1,6 @@
 using Application.Features.Auth.Commands.Login;
 using Application.Features.Auth.Constants;
+using Application.Services.Auditing;
 using Application.Services.Repositories;
 using Application.Services.Security;
 using BankingSystemCore.CrossCuttingConcerns.Exceptions.Types;
@@ -23,11 +24,13 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, L
     private readonly AuthTokenIssuer _issuer;
     private readonly TimeProvider _time;
     private readonly EmailVerificationOptions _emailOptions;
+    private readonly SecurityAudit _audit;
 
     public RefreshTokenCommandHandler(
         IUserSessionRepository sessions, IApplicationUserRepository users, AuthTokenIssuer issuer, TimeProvider time,
-        IOptions<EmailVerificationOptions> emailOptions)
+        IOptions<EmailVerificationOptions> emailOptions, SecurityAudit audit)
     {
+        _audit = audit;
         _sessions = sessions;
         _users = users;
         _issuer = issuer;
@@ -51,6 +54,7 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, L
         if (session.RefreshTokenHash != hash)
         {
             await RevokeAsync(session, "Refresh token reuse detected", now, cancellationToken);
+            await _audit.RefreshTokenReusedAsync(session.UserId, session.Id, cancellationToken);
             throw new AuthenticationException(AuthMessages.InvalidRefreshToken);
         }
 

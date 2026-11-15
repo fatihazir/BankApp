@@ -15,7 +15,7 @@ public class CustomerSchemaTests(SqlServerFixture database) : IntegrationTestBas
             .ToListAsync(TestContext.Current.CancellationToken));
 
         tables.ShouldBe(
-            ["ApplicationUsers", "CorporateCustomers", "Customers", "IndividualCustomers", "LoanApplications", "LoanSubTypes", "LoanTypes", "UserSessions", "Users"],
+            ["ApplicationUsers", "AuditLogs", "CorporateCustomers", "Customers", "IndividualCustomers", "LoanApplications", "LoanSubTypes", "LoanTypes", "UserSessions", "Users"],
             ignoreOrder: true);
     }
 

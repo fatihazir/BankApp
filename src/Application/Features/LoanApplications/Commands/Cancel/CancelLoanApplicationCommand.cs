@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Services.Security;
 using BankingSystemCore.Application.Pipelines.Authorization;
 using Application.Features.LoanApplications.Constants;
@@ -10,9 +11,12 @@ using MediatR;
 
 namespace Application.Features.LoanApplications.Commands.Cancel;
 
-public class CancelLoanApplicationCommand : IRequest<LoanApplicationStatusResponse>, ISecuredRequest
+[Audit("LoanApplication.Cancel", "LoanApplication")]
+public class CancelLoanApplicationCommand : IRequest<LoanApplicationStatusResponse>, ISecuredRequest, IAuditDetail
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.StaffAndCustomer;
+
+    string? IAuditDetail.AuditDetail => Reason;
 
     public Guid Id { get; set; }
     public string? Reason { get; set; }

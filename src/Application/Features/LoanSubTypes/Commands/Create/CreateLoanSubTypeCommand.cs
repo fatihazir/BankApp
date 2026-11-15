@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Services.Security;
 using BankingSystemCore.Application.Pipelines.Authorization;
 using Application.Features.LoanSubTypes.Profiles;
@@ -9,6 +10,7 @@ using MediatR;
 
 namespace Application.Features.LoanSubTypes.Commands.Create;
 
+[Audit("LoanSubType.Create", "LoanSubType")]
 public class CreateLoanSubTypeCommand : IRequest<CreatedLoanSubTypeResponse>, ISecuredRequest
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.StaffOnly;

@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Features.Auth.Constants;
 using Application.Services.Repositories;
 using Application.Services.Security;
@@ -12,9 +13,12 @@ namespace Application.Features.Users.Commands.Ban;
 /// <summary>
 /// Bans a user: they cannot log in, and every session they have stops working immediately.
 /// </summary>
-public class BanUserCommand : IRequest<BannedUserResponse>, ISecuredRequest
+[Audit("User.Ban", "User")]
+public class BanUserCommand : IRequest<BannedUserResponse>, ISecuredRequest, IAuditDetail
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.StaffOnly;
+
+    string? IAuditDetail.AuditDetail => Reason;
 
     public Guid Id { get; set; }
     public string Reason { get; set; } = string.Empty;

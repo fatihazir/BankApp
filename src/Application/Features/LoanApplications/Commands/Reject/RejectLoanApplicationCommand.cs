@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Services.Security;
 using BankingSystemCore.Application.Pipelines.Authorization;
 using Application.Features.LoanApplications.Profiles;
@@ -8,9 +9,12 @@ using MediatR;
 
 namespace Application.Features.LoanApplications.Commands.Reject;
 
-public class RejectLoanApplicationCommand : IRequest<LoanApplicationStatusResponse>, ISecuredRequest
+[Audit("LoanApplication.Reject", "LoanApplication")]
+public class RejectLoanApplicationCommand : IRequest<LoanApplicationStatusResponse>, ISecuredRequest, IAuditDetail
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.StaffOnly;
+
+    string? IAuditDetail.AuditDetail => Reason;
 
     public Guid Id { get; set; }
     public string Reason { get; set; } = string.Empty;

@@ -254,6 +254,10 @@ Authorization → Validation → (Logging / Transaction / Caching, if present) �
 7. **Mutation check for guards.** When a security test is added, remove the protection once and confirm the test fails.
 8. Time-dependent logic is tested through the injected clock, never by sleeping.
 9. Cross-cutting infrastructure that is disabled in tests (rate limiter, caches) must be configurable per environment so tests do not fail on shared client addresses or stale state.
+10. **Assert each behavior at the lowest level that can prove it.** A pure rule or validator is proven by a unit test; do not repeat it in an integration test.
+    - *Database integration tests* only cover what needs the real engine: translated queries, constraints and indexes, soft-delete filters, persisted state, concurrency tokens, seed data, configuration binding.
+    - *HTTP tests* only cover what needs the real host: routing, binding, status codes and problem format, authentication wiring, one representative case per error kind.
+    - A test whose every assertion is already made by a lower-level test and a higher-level test is deleted.
 
 ---
 

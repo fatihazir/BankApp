@@ -220,15 +220,17 @@ VS Code: Dev Containers → *Reopen in Container* (`.devcontainer/`).
 
 ```mermaid
 flowchart BT
-    A[BankingSystemCore.UnitTests<br/>83] --> B[Application.UnitTests<br/>402]
-    B --> C[Persistence.IntegrationTests<br/>152]
-    C --> D[WebApi.IntegrationTests<br/>138]
+    A[BankingSystemCore.UnitTests<br/>83] --> B[Application.UnitTests<br/>396]
+    B --> C[Persistence.IntegrationTests<br/>91]
+    C --> D[WebApi.IntegrationTests<br/>136]
 ```
 
 xUnit v3 (MTP) · Shouldly · NSubstitute · Testcontainers.MsSql · Respawn · Mvc.Testing. Integration tests use a real SQL Server, reset between tests.
 
+Rule: a behavior is asserted at the lowest level that can prove it. Database tests cover only what needs the real engine (queries, constraints, persisted state), HTTP tests only what needs the real host (routing, status codes, auth wiring). See [docs/ARCHITECTURE_PRINCIPLES.md](docs/ARCHITECTURE_PRINCIPLES.md) §11.
+
 ```bash
-./scripts/test.sh                                            # all (775)
+./scripts/test.sh                                            # all (706)
 ./scripts/dotnet.sh test --project tests/Application.UnitTests   # no Docker socket needed
 ```
 

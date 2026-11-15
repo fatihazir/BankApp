@@ -96,38 +96,6 @@ public class IndividualCustomerTests(SqlServerFixture database) : IntegrationTes
     }
 
     [Fact]
-    public async Task Create_WithInvalidNationalIdChecksum_IsRejected()
-    {
-        var command = TestData.IndividualCreate();
-        command.NationalId = "12345678901";
-
-        await Should.ThrowAsync<BusinessException>(() => Send(command));
-    }
-
-    [Fact]
-    public async Task Create_Underage_IsRejected()
-    {
-        var command = TestData.IndividualCreate();
-        command.DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-10));
-
-        await Should.ThrowAsync<BusinessException>(() => Send(command));
-    }
-
-    [Fact]
-    public async Task Create_WithInvalidFormat_FailsValidation_BeforeReachingTheDatabase()
-    {
-        await Should.ThrowAsync<ValidationException>(() => Send(new CreateIndividualCustomerCommand { Email = "x" }));
-
-        (await Send(new GetListIndividualCustomerQuery())).Count.ShouldBe(0);
-    }
-
-    [Fact]
-    public async Task GetById_WhenMissing_Throws()
-    {
-        await Should.ThrowAsync<NotFoundException>(() => Send(new GetByIdIndividualCustomerQuery { Id = Guid.NewGuid() }));
-    }
-
-    [Fact]
     public async Task Delete_IsSoft_RowStaysInDatabaseButIsHiddenFromQueries()
     {
         var created = await Send(TestData.IndividualCreate());

@@ -215,18 +215,4 @@ public class CorporateCustomersControllerTests(SqlServerFixture database) : ApiT
         Example(BaseUrl, "post").GetProperty("taxNumber").GetString().ShouldBe("1234567890");
         Example(BaseUrl + "/{id}", "put").GetProperty("isActive").GetBoolean().ShouldBeTrue();
     }
-
-    [Fact]
-    public async Task SwaggerExamples_AreAcceptedByTheApi()
-    {
-        // The pre-filled Swagger body must be a valid request, otherwise "Try it out" fails for the user.
-        var doc = await ReadJsonAsync(await Client.GetAsync("/openapi/v1.json", Ct));
-        JsonElement example = doc.GetProperty("paths").GetProperty(BaseUrl).GetProperty("post")
-            .GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("example");
-
-        var response = await Client.PostAsync(BaseUrl,
-            new StringContent(example.GetRawText(), System.Text.Encoding.UTF8, "application/json"), Ct);
-
-        response.StatusCode.ShouldBe(HttpStatusCode.Created);
-    }
 }

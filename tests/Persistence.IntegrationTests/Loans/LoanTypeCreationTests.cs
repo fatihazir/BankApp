@@ -40,10 +40,6 @@ public class LoanTypeCreationTests(SqlServerFixture database) : IntegrationTestB
     }
 
     [Fact]
-    public async Task LoanType_WithInvalidData_FailsValidation() =>
-        await Should.ThrowAsync<ValidationException>(() => Send(new CreateLoanTypeCommand { Name = "" }));
-
-    [Fact]
     public async Task CreatedSubType_AppearsUnderItsType_AndCanBeAppliedFor()
     {
         var type = await Send(new CreateLoanTypeCommand { Name = "Special Loan", Segment = CustomerSegment.Individual });
@@ -86,31 +82,6 @@ public class LoanTypeCreationTests(SqlServerFixture database) : IntegrationTestB
 
         await Should.ThrowAsync<BusinessException>(() => Send(NewSubType(LoanSeedData.IndividualLoanTypeId, "Education Loan")));
         await Send(NewSubType(LoanSeedData.CorporateLoanTypeId, "Education Loan"));
-    }
-
-    [Fact]
-    public async Task SubType_UnderAnUnknownType_IsNotFound() =>
-        await Should.ThrowAsync<NotFoundException>(() => Send(NewSubType(Guid.NewGuid())));
-
-    [Fact]
-    public async Task SubType_UnderAnInactiveType_IsRejected()
-    {
-        await UsingDbContext(async db =>
-        {
-            (await db.LoanTypes.FindAsync([LoanSeedData.CorporateLoanTypeId], TestContext.Current.CancellationToken))!.IsActive = false;
-            return await db.SaveChangesAsync(TestContext.Current.CancellationToken);
-        });
-
-        await Should.ThrowAsync<BusinessException>(() => Send(NewSubType(LoanSeedData.CorporateLoanTypeId)));
-    }
-
-    [Fact]
-    public async Task SubType_WithInconsistentLimits_FailsValidation()
-    {
-        var command = NewSubType(LoanSeedData.IndividualLoanTypeId);
-        command.MaxAmount = command.MinAmount - 1;
-
-        await Should.ThrowAsync<ValidationException>(() => Send(command));
     }
 
     [Fact]

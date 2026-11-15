@@ -85,24 +85,6 @@ public class CorporateCustomerTests(SqlServerFixture database) : IntegrationTest
     }
 
     [Fact]
-    public async Task Create_WithFutureFoundationDate_IsRejected()
-    {
-        var command = TestData.CorporateCreate();
-        command.FoundationDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10));
-
-        await Should.ThrowAsync<BusinessException>(() => Send(command));
-    }
-
-    [Fact]
-    public async Task Create_WithWrongTaxNumberLength_FailsValidation()
-    {
-        var command = TestData.CorporateCreate();
-        command.TaxNumber = "123";
-
-        await Should.ThrowAsync<ValidationException>(() => Send(command));
-    }
-
-    [Fact]
     public async Task Delete_IsSoft_RowStaysInDatabaseButIsHiddenFromQueries()
     {
         var created = await Send(TestData.CorporateCreate());

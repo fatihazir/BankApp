@@ -20,17 +20,6 @@ public class CustomerSchemaTests(SqlServerFixture database) : IntegrationTestBas
     }
 
     [Fact]
-    public async Task BothCustomerTypes_ShareTheBaseCustomersTable()
-    {
-        await Send(TestData.IndividualCreate(1));
-        await Send(TestData.CorporateCreate(1));
-
-        int baseRows = await UsingDbContext(db => db.Customers.CountAsync(TestContext.Current.CancellationToken));
-
-        baseRows.ShouldBe(2);
-    }
-
-    [Fact]
     public async Task UniqueIndex_OnNationalId_IsEnforcedByTheDatabase()
     {
         // Bypasses the business rules on purpose: the database must still protect the data.

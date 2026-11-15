@@ -13,8 +13,10 @@ namespace Persistence.IntegrationTests.Security;
 [Collection(DatabaseCollection.Name)]
 public class UserSchemaTests(SqlServerFixture database) : IntegrationTestBase(database)
 {
+#pragma warning disable EF1002 // The table name is a constant written in these tests, never user input.
     private Task<int> Count(string table) => UsingDbContext(db =>
         db.Database.SqlQueryRaw<int>($"SELECT COUNT(*) AS [Value] FROM [{table}]").SingleAsync(TestContext.Current.CancellationToken));
+#pragma warning restore EF1002
 
     private Task<List<string>> ColumnsOf(string table) => UsingDbContext(db =>
         db.Database.SqlQueryRaw<string>("SELECT COLUMN_NAME AS [Value] FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = {0}", table)

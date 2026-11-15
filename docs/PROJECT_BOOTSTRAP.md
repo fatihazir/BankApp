@@ -70,7 +70,7 @@ flowchart LR
 | 1 | Product name (PascalCase) and kernel name | `{Product}`, `{Product}Core` | project names, namespaces, DB name |
 | 2 | One paragraph: what it does, who uses it | – | feature folders later, role names |
 | 3 | Who logs in? Names of the roles | `Admin`, `User` | `AppRoles`, role claim, contract test |
-| 4 | Can end users sign themselves up, or are accounts created by staff? | staff creates | whether a public sign-up endpoint exists |
+| 4 | Can end users sign themselves up, or are accounts created by an admin? | admin creates | whether a public sign-up endpoint exists |
 | 5 | Database | SQL Server | provider package, health check, unique-violation detector, Testcontainers module |
 | 6 | Multi-tenant? | no | tenant id column + query filter (not in skeleton, remind) |
 | 7 | Does it store personal or financial data? | yes, assume | encryption/masking reminders |
@@ -85,12 +85,12 @@ Echo the answers back as a table and ask for a yes before step 1.
 
 ## 3. Placeholders and naming
 
-| Placeholder | Reference project value | Meaning |
+| Placeholder | Example | Meaning |
 |---|---|---|
-| `{Product}` | `BankApp` | solution name, DB name, volume names |
-| `{Core}` | `BankingSystemCore` | reusable kernel project and root namespace |
-| `{Roles}` | `Customer`, `BankStaff` | roles of the product (skeleton default `User`, `Admin`) |
-| `{Db}` | `BankAppDb` | connection string name |
+| `{Product}` | `TodoApp` | solution name, DB name, volume names |
+| `{Core}` | `AcmeCore` | reusable kernel project and root namespace (reuse it across products) |
+| `{Roles}` | `Admin`, `User` | roles of the product (skeleton default) |
+| `{Db}` | `TodoAppDb` | connection string name |
 
 Projects: `{Core}`, `Domain`, `Application`, `Persistence`, `WebApi`; tests: `{Core}.UnitTests`, `Application.UnitTests`, `Persistence.IntegrationTests`, `WebApi.IntegrationTests`. Solution file: `{Product}.slnx`.
 
@@ -232,7 +232,7 @@ classDiagram
 ```
 
 - **Table-per-type** inheritance. Creating a specialized actor is one command and one save that writes every table of its chain; its id equals the user id equals the JWT `sub`.
-- `ApplicationUser.Role` is an enum stored as int; **the role is never read from a request**: self-created or staff-created accounts get a fixed role, privileged accounts come only from a dedicated, protected command.
+- `ApplicationUser.Role` is an enum stored as int; **the role is never read from a request**: self-created or admin-created accounts get a fixed role, privileged accounts come only from a dedicated, protected command.
 - `UserSession`, `AuditLog`: ordinary entities (`Entity<Guid>`); `AuditLog` has **no foreign keys**.
 - Concurrency: `RowVersion` (`rowversion`) on `User`, `UserSession` and on every entity that two actors can change at once (state machines). A stale write → `DbUpdateConcurrencyException` → 409.
 - Decimal money fields: explicit precision. Dates: UTC `DateTime`, date-only values as `DateOnly`.
@@ -273,10 +273,10 @@ sequenceDiagram
 | Unknown e-mail | verify against a dummy hash so timing matches; same generic message |
 | Password policy | ≥ 10 chars, upper, lower, digit; applied on **every** operation that sets a password |
 | Race safety | login/refresh read the user with `enableTracking:false` and never write it back, so they cannot undo a ban |
-| E-mail verification | token 24 h, single use, hash stored; `RequireVerifiedEmail` default `false`; staff-created accounts are pre-verified |
-| Bootstrap | first privileged account from `Security:BootstrapStaff:Email/Password` when none exists; remove the settings afterwards |
+| E-mail verification | token 24 h, single use, hash stored; `RequireVerifiedEmail` default `false`; admin-created accounts are pre-verified |
+| Bootstrap | first privileged account from `Security:BootstrapAdmin:Email/Password` when none exists; remove the settings afterwards |
 
-Endpoints (all under `/api/v0`): `POST auth/login`, `auth/refresh`, `auth/logout`, `auth/verify-email`, `auth/send-verification-email`; `GET auth/me`; `GET users`, `POST users/staff`, `POST users/{id}/ban`, `POST users/{id}/unban`. Anonymous: login, refresh, verify-email (rate limited).
+Endpoints (all under `/api/v0`): `POST auth/login`, `auth/refresh`, `auth/logout`, `auth/verify-email`, `auth/send-verification-email`; `GET auth/me`; `GET users`, `POST users/admins`, `POST users/{id}/ban`, `POST users/{id}/unban`. Anonymous: login, refresh, verify-email (rate limited).
 
 Ownership rule (generic): *roles say who may run a request; an access policy says whose data it may touch.* A non-owner reading a record gets **404**; acting for someone else gets **403**.
 
@@ -359,10 +359,10 @@ Stack: xUnit v3 on Microsoft Testing Platform (`global.json`: `"test": {"runner"
 |---|---|
 | `SqlServerFixture` (collection fixture) | one throwaway SQL Server per run; `MigrateAsync` once; Respawn resets before each test with `TablesToIgnore = __EFMigrationsHistory`; **re-seeds reference data** after each reset |
 | `IntegrationTestBase` | builds the real DI container (`ValidateScopes`, `ValidateOnBuild`), swaps `ICurrentUser`, `IEmailSender`, `TimeProvider`; `Send(request)`, `UsingDbContext`, `ScopedDb` (two contexts to play two requests against each other), `Resolve`, optional extra settings |
-| `TestCurrentUser` | staff by default; `AsCustomer(id)`, `AsAnonymous()`, `UseSession(id)`; fixed IP |
+| `TestCurrentUser` | admin by default; `AsUser(id)`, `AsAnonymous()`, `UseSession(id)`; fixed IP |
 | `TestClock` | starts at real time then **stands still**; `Advance`; no `Task.Delay` in tests |
 | `CapturingEmailSender` | keeps mails so tests read verification links |
-| `ApiTestBase` | `WebApplicationFactory<Program>` in Development; sets test connection string, JWT settings, password iterations = 10 (fast), **rate limit off, session cleanup off** (tests share one address and reset the DB); a staff client, an anonymous client, `ClientFor(token)`, `IssueTokenAsync(role)` (real signed token tied to a real session), optional extra settings |
+| `ApiTestBase` | `WebApplicationFactory<Program>` in Development; sets test connection string, JWT settings, password iterations = 10 (fast), **rate limit off, session cleanup off** (tests share one address and reset the DB); an admin client, an anonymous client, `ClientFor(token)`, `IssueTokenAsync(role)` (real signed token tied to a real session), optional extra settings |
 | Unit `AuthFixture`, `FakeCurrentUser`, `TestClock`, `MappingContract` | fake clock + fake repositories; reflection helpers for mapper contracts |
 
 ### 11.3 Test catalog the skeleton must contain
@@ -382,23 +382,23 @@ Stack: xUnit v3 on Microsoft Testing Platform (`global.json`: `"test": {"runner"
 - `SecurityContractTests`: every request is `ISecuredRequest` unless on the explicit open list; the open list is really unsecured; only known roles; `Roles` is not a public property; a table pins the roles of each request; a coverage test fails when a request is missing from the table; request count asserted.
 - `AuditContractTests`: every `*Command` has `[Audit]` or is on the explained list; queries never audited; action names unique; no `IAuditDetail` on requests carrying a password.
 - Mapper contract per mapped feature: all command properties copied; system fields untouched on create and update; every entity property accounted for; responses only contain entity properties; **no secret** (`Password`, `Hash`, `RowVersion`, `Token`) in any response; round trip; paging copied; empty page.
-- Rules (existence, uniqueness incl. soft-deleted rows, state transitions, limits, time-dependent boundaries with `TestClock`), validators (valid, empty, each field), handlers (success, each failure, "nothing saved" via `DidNotReceive`), ownership policy matrix (staff, own record, other's record = 404, acting for another = 403, no id, anonymous).
-- Auth: login (token content, session, case/trim, same message for unknown and wrong, counters, lockout, unlock after expiry, inactive, verification required/optional), refresh (rotate, once only, reuse revokes, expired, revoked, banned, no user write), logout (idempotent), verify e-mail (hash only, expiry boundary, same message for every failure), ban/unban (self-ban refused, double ban, batches of sessions revoked), create staff, user list never exposes secrets, `SecurityAudit` events.
+- Rules (existence, uniqueness incl. soft-deleted rows, state transitions, limits, time-dependent boundaries with `TestClock`), validators (valid, empty, each field), handlers (success, each failure, "nothing saved" via `DidNotReceive`), ownership policy matrix (admin, own record, other's record = 404, acting for another = 403, no id, anonymous).
+- Auth: login (token content, session, case/trim, same message for unknown and wrong, counters, lockout, unlock after expiry, inactive, verification required/optional), refresh (rotate, once only, reuse revokes, expired, revoked, banned, no user write), logout (idempotent), verify e-mail (hash only, expiry boundary, same message for every failure), ban/unban (self-ban refused, double ban, batches of sessions revoked), create admin, user list never exposes secrets, `SecurityAudit` events.
 - Pipeline: `ValidationBehavior` (throws and skips handler, groups by property, passes when valid or no validators).
 
 **`Persistence.IntegrationTests`**
-- Schema: expected table list; one row per table of an identity chain; the kernel `Users` table holds login columns only; unique e-mail across all user types (also when rules are bypassed); unique business keys; FK `Restrict`; a customer with children cannot be deleted; decimals keep precision; a failed multi-table insert leaves no row anywhere.
+- Schema: expected table list; one row per table of an identity chain; the kernel `Users` table holds login columns only; unique e-mail across all user types (also when rules are bypassed); unique business keys; FK `Restrict`; an entity with children cannot be deleted; decimals keep precision; a failed multi-table insert leaves no row anywhere.
 - Concurrency: two contexts, second write refused (user, session, every state-machine entity).
 - Sessions: login creates sessions; refresh rotates (still one row); reuse revokes and stores the reason; hash only in DB; revoked/expired are not alive.
 - Repository stamps `CreateDate/UpdateDate/DeleteDate` from the clock; soft delete keeps the row.
 - Unique detector against real errors (duplicate = yes, too-long value = no).
 - Cleanup service (old revoked/expired deleted; live and recent kept; time passing; batches).
-- Audit trail through the real pipeline: decision flow, ban/unban/staff, no secret or personal id, failed requests leave nothing, logins/refusals/lockout, unknown e-mail leaves nothing, outlives deleted users, list filters/paging/order, 401/403.
+- Audit trail through the real pipeline: state-change flow, ban/unban/admin creation, no secret or personal id, failed requests leave nothing, logins/refusals/lockout, unknown e-mail leaves nothing, outlives deleted users, list filters/paging/order, 401/403.
 - Option binding proofs (e.g. `RequireVerifiedEmail=true` changes login).
 
 **`WebApi.IntegrationTests`**
 - Authentication matrix: every protected route (including every route with an `{id}`) → 401 problem+json without a token; only login/refresh/verify-email are open; malformed token, tampered payload, wrong key, expired, wrong issuer/audience, `alg: none` → 401; unknown role → 403.
-- Authorization matrix: staff-only routes → 403 for a customer; ownership (404 for others, 403 acting for others); login → `me`; same message for unknown e-mail and wrong password; lockout.
+- Authorization matrix: admin-only routes → 403 for a normal user; ownership (404 for others, 403 acting for others); login → `me`; same message for unknown e-mail and wrong password; lockout.
 - Sessions at HTTP level: refresh rotation, reuse kills session **and** access token, logout (only that session), ban/unban/delete take effect on the very next request, lists never show secrets.
 - E-mail verification flows with the captured mail (link contains the escaped address, no password).
 - Problem format for 400/401/403/404/409/429/500 and "no internal type names leak".
@@ -424,15 +424,15 @@ Stack: xUnit v3 on Microsoft Testing Platform (`global.json`: `"test": {"runner"
 | 2 | Kernel: entity, repository + EF base, paging, exceptions + middleware | kernel tests |
 | 3 | Kernel security: hashing, tokens, JWT, current user, authorization behavior, mailing, registration | kernel tests |
 | 4 | Domain + Persistence: `User` chain, `UserSession`, configurations, context, first migration, `IUniqueViolationDetector` impl | schema tests |
-| 5 | Application base: registration, validation behavior, repository ports, `BankRoles`-style `AppRoles`, access policy, `ISessionValidator`, token issuer, session service, e-mail verification service | unit tests |
+| 5 | Application base: registration, validation behavior, repository ports, `AppRoles`, access policy, `ISessionValidator`, token issuer, session service, e-mail verification service | unit tests |
 | 6 | Auth + Users features (section 7) with validators, rules, mappers, messages | unit + contract tests |
-| 7 | WebApi: composition root, JWT auth + session check, controllers, problem responses, bootstrap staff | HTTP tests |
+| 7 | WebApi: composition root, JWT auth + session check, controllers, problem responses, bootstrap admin | HTTP tests |
 | 8 | API versioning + OpenAPI + examples | versioning/openapi tests |
 | 9 | Host hardening (section 9.1) | hardening tests |
 | 10 | Session cleanup service + worker | cleanup tests |
 | 11 | Audit trail (section 8) | audit tests + contract |
 | 12 | Test infrastructure + catalog completion (section 11) | counts recorded |
-| 13 | README (visual, few words) + this blueprint kept in `docs/`; `docs/ARCHITECTURE_PRINCIPLES.md` rules | docs |
+| 13 | README (visual, few words) + this blueprint kept in `docs/` | docs |
 | 14 | Acceptance run (section 14) and tailored reminders (section 15) | hand-over |
 
 Steps 2–12 interleave tests with code (write the test with the feature). Step order is dependency order.
@@ -448,7 +448,7 @@ Steps 2–12 interleave tests with code (write the test with the feature). Step 
 | `scripts/dotnet.sh` | `docker run --rm [-it] -v $REPO:/src -v {product}-nuget-cache:/root/.nuget/packages -w /src -e DOTNET_CLI_TELEMETRY_OPTOUT=1 -e DOTNET_NOLOGO=1 mcr.microsoft.com/dotnet/sdk:10.0 dotnet "$@"` |
 | `scripts/test.sh` | same, plus `-v /var/run/docker.sock:/var/run/docker.sock -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal`; default `dotnet test --solution {Product}.slnx`; extra args pass through (`--project …`) |
 | `scripts/ef.sh` | `docker run … dotnet tool restore && dotnet ef "$@" --project src/Persistence --startup-project src/WebApi`; optional `EF_DOCKER_NETWORK` and `ConnectionStrings__{Db}` to reach the compose database |
-| `docker-compose.yml` | `sql` (SQL Server 2022, `platform: linux/amd64`, published on `127.0.0.1:1433` only, healthcheck) and `api` (SDK image, `dotnet run --project src/WebApi --no-launch-profile`, port 5043→8080, env: Development, dev-only JWT key, `Mailing__LogBody=true`, bootstrap staff, connection string); named volumes for data and an **external** NuGet cache volume |
+| `docker-compose.yml` | `sql` (SQL Server 2022, `platform: linux/amd64`, published on `127.0.0.1:1433` only, healthcheck) and `api` (SDK image, `dotnet run --project src/WebApi --no-launch-profile`, port 5043→8080, env: Development, dev-only JWT key, `Mailing__LogBody=true`, bootstrap admin, connection string); named volumes for data and an **external** NuGet cache volume |
 | `.devcontainer/devcontainer.json` | SDK image, workspace mounted at `/src`, NuGet volume, `postCreateCommand: dotnet restore`, C# Dev Kit |
 | `.vscode/settings.json` | `files.watcherExclude`, `search.exclude`, `files.exclude` for `bin/obj/TestResults`; `git.repositoryScanMaxDepth` |
 
@@ -482,7 +482,7 @@ Check for newer **compatible** patch versions at bootstrap; never take a major t
 | `Security:Jwt:AccessTokenExpirationMinutes / RefreshTokenExpirationMinutes` | 10 / 30 | |
 | `Security:PasswordHashing:Iterations` | 600000 | 10 in tests only |
 | `Security:EmailVerification:RequireVerifiedEmail / TokenLifetimeHours / LinkTemplate` | false / 24 / local URL | |
-| `Security:BootstrapStaff:Email / Password` | unset | first privileged account; remove afterwards |
+| `Security:BootstrapAdmin:Email / Password` | unset | first privileged account; remove afterwards |
 | `Security:SessionCleanup:Enabled / Interval / RetentionDays / BatchSize` | true / 01:00:00 / 7 / 500 | |
 | `Mailing:LogBody` | false | true writes mail tokens to the log: dev only |
 | `ForwardedHeaders:KnownProxies / KnownNetworks` | empty | |
@@ -516,7 +516,7 @@ After the bootstrap and after the user states the product context, print this li
 | Topic | Remind when | Why |
 |---|---|---|
 | Real signing key from a secret store; key rotation plan (`kid`, accept old+new) | before first deploy | a leaked key mints any role |
-| Remove `BootstrapStaff` settings and compose defaults (`SA_PASSWORD`, `JWT_KEY`, `Mailing__LogBody`) | before first deploy | dev conveniences |
+| Remove `BootstrapAdmin` settings and compose defaults (`SA_PASSWORD`, `JWT_KEY`, `Mailing__LogBody`) | before first deploy | dev conveniences |
 | **Dockerfile + `.dockerignore`** (production image; compose runs `dotnet run` in the SDK image) | before first deploy | not part of the skeleton |
 | **CI/CD**: build, test (Docker needed for Testcontainers), dependency and secret scanning, image build once and promote, migrations as an explicit deploy step, `main` protected (PR only) | before first deploy | not part of the skeleton |
 | `ForwardedHeaders` known proxies/networks, `Cors` origins, `RateLimiting` limits | before first deploy, behind a proxy or with a front end | otherwise the limiter sees the proxy and CORS blocks the UI |
@@ -550,6 +550,39 @@ After the bootstrap and after the user states the product context, print this li
 
 ---
 
-## 17. Out of scope (on purpose)
+## 17. Rules that apply to every change
+
+### Security stance
+Secure by default (a request or endpoint is protected unless declared open; opening one is a reviewed decision) · defense in depth (transport, pipeline, handler each assume the others can fail) · least privilege (roles grant the minimum; privileged roles only through protected commands) · fail closed (missing config, unreadable claim, unknown role = deny).
+
+### Code rules
+| Area | Rule |
+|---|---|
+| Validation vs rules | structural checks (shape, ranges) are stateless and run in the pipeline, never touch the database; business rules need data and run in the handler through rule classes with constant messages |
+| State machines | lifecycle entities expose an allowed-transition check; a request that leaves an invalid state fails with a business error; they carry a `rowversion` |
+| DI | constructor injection only; scoped by default; singletons are stateless; time and randomness are injected (`TimeProvider`); Application never touches the HTTP context (use `ICurrentUser`) |
+| Configuration | typed options, validated on start; sources layered: repository defaults → environment file → environment variables/secret store; the container is validated on build (`ValidateScopes`, `ValidateOnBuild`) |
+| Secrets | never committed; dev defaults are labelled dev-only; bootstrap data comes from configuration and is removed afterwards |
+| Responses | existence is not disclosed across ownership boundaries; secrets and hashes never appear in a DTO, log line or exception message (a test asserts it) |
+
+### When you add something later
+| Addition | Constraint |
+|---|---|
+| Cache | reference data only; expiry and an invalidation path; **never the session check**; shared store when more than one instance; cleared between tests |
+| Rate limit | at the host, per policy; partition by client address (anonymous) or principal id; real address needs trusted proxies; limits configurable, off in tests |
+| Observability | structured logs with trace id on every line and every error response; liveness and readiness separate; no secrets or personal data in logs |
+| Background work | persisted trigger, idempotent, safe to retry, safe on every instance |
+| New use case | request + handler + validator + rule + mapper + endpoint + tests at the right level + role-table row + `[Audit]` (or a reasoned exception) + README/docs |
+| New open request, new role, new cross-layer reference | architectural decision: explicit review |
+
+### Delivery (when the pipeline is built)
+Stages: restore → build (warnings as errors) → unit tests → integration tests (needs a container runtime) → dependency and secret scan → package → deploy. Secrets come from the CI secret store. Schema changes are a deployment step run before traffic moves, backward compatible with the previous version (expand → migrate → contract). Images are built once and promoted; only configuration differs. Production never auto-migrates or seeds development data. Known-vulnerable packages fail the build.
+
+### Documents
+Rules change only by deliberate edit, in the same commit as the code that needs the exception. When a rule and the code disagree, fix one of them the same day.
+
+---
+
+## 18. Out of scope (on purpose)
 
 Product entities and features · UI · payment/queue/search integrations · multi-tenancy · distributed cache · real e-mail provider · password reset and MFA · Dockerfile and CI/CD (reminded, built later on request) · data encryption at rest.

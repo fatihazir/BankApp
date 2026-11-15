@@ -2,10 +2,7 @@
 
 .NET 10 · C# · Clean Architecture · CQRS (MediatR) · EF Core 10 / SQL Server · JWT + server-side sessions.
 
-| Document | For |
-|---|---|
-| [docs/PROJECT_BOOTSTRAP.md](docs/PROJECT_BOOTSTRAP.md) | Blueprint: give it to an agent or a teammate to build the same skeleton for any product |
-| [docs/ARCHITECTURE_PRINCIPLES.md](docs/ARCHITECTURE_PRINCIPLES.md) | Domain-free design rules |
+Blueprint of the skeleton (architecture, security, tests, rules) for any product: [docs/PROJECT_BOOTSTRAP.md](docs/PROJECT_BOOTSTRAP.md)
 
 ## 1. Layers
 
@@ -259,7 +256,7 @@ flowchart BT
 
 xUnit v3 (MTP) · Shouldly · NSubstitute · Testcontainers.MsSql · Respawn · Mvc.Testing. Integration tests use a real SQL Server, reset between tests.
 
-Rule: a behavior is asserted at the lowest level that can prove it. Database tests cover only what needs the real engine (queries, constraints, persisted state), HTTP tests only what needs the real host (routing, status codes, auth wiring). See [docs/ARCHITECTURE_PRINCIPLES.md](docs/ARCHITECTURE_PRINCIPLES.md) §11.
+Rule: a behavior is asserted at the lowest level that can prove it. Database tests cover only what needs the real engine (queries, constraints, persisted state), HTTP tests only what needs the real host (routing, status codes, auth wiring). See [docs/PROJECT_BOOTSTRAP.md](docs/PROJECT_BOOTSTRAP.md) §11.
 
 ```bash
 ./scripts/test.sh                                            # all (777)
@@ -271,7 +268,7 @@ Rule: a behavior is asserted at the lowest level that can prove it. Database tes
 ```
 BankApp.slnx · docker-compose.yml · global.json
 scripts/   dotnet.sh  ef.sh  test.sh
-docs/      ARCHITECTURE_PRINCIPLES.md
+docs/      PROJECT_BOOTSTRAP.md
 src/       BankingSystemCore  Domain  Application  Persistence  WebApi
 tests/     BankingSystemCore.UnitTests  Application.UnitTests
            Persistence.IntegrationTests  WebApi.IntegrationTests

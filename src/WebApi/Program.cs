@@ -25,6 +25,7 @@ builder.Services.AddPersistenceServices(builder.Configuration);
 builder.Services.AddSecurityServices(builder.Configuration);
 builder.Services.AddJwtAuthentication();
 builder.Services.AddHostHardening(builder.Configuration);
+builder.Services.AddHostedService<UserSessionCleanupWorker>();
 
 // Do not tell the world which web server this is.
 builder.WebHost.ConfigureKestrel(kestrel => kestrel.AddServerHeader = false);

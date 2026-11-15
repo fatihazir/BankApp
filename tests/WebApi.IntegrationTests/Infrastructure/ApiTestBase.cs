@@ -61,6 +61,8 @@ public abstract class ApiTestBase : IAsyncLifetime
             builder.UseSetting("Security:PasswordHashing:Iterations", "10"); // fast hashing in tests only
             // Every test logs in from the same address, so the rate limit is off unless a test asks for it.
             builder.UseSetting("RateLimiting:Enabled", "false");
+            // The cleanup worker would touch the database while a test resets it; one test switches it on.
+            builder.UseSetting("Security:SessionCleanup:Enabled", "false");
             foreach ((string key, string? value) in extraSettings ?? [])
                 builder.UseSetting(key, value);
             builder.ConfigureTestServices(services =>

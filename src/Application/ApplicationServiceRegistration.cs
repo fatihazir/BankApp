@@ -42,8 +42,10 @@ public static class ApplicationServiceRegistration
         services.AddScoped<UserSessionService>();
         services.AddScoped<EmailVerificationService>();
         services.AddScoped<ISessionValidator, SessionValidator>();
+        services.AddScoped<UserSessionCleanupService>();
 
         services.AddOptions<EmailVerificationOptions>().BindConfiguration(EmailVerificationOptions.SectionName);
+        services.AddOptions<UserSessionCleanupOptions>().BindConfiguration(UserSessionCleanupOptions.SectionName);
         services.AddScoped<CustomerAccessPolicy>();
         services.AddScoped<LoanSubTypeBusinessRules>();
 

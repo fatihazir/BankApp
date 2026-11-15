@@ -166,3 +166,46 @@ public class CorsClosedByDefaultTests(SqlServerFixture database) : ApiTestBase(d
         response.Headers.Contains("Access-Control-Allow-Origin").ShouldBeFalse();
     }
 }
+
+/// <summary>The cleanup worker, switched on with a one second interval.</summary>
+[Collection(DatabaseCollection.Name)]
+public class SessionCleanupWorkerTests(SqlServerFixture database) : ApiTestBase(database, new()
+{
+    ["Security:SessionCleanup:Enabled"] = "true",
+    ["Security:SessionCleanup:Interval"] = "00:00:01"
+})
+{
+    [Fact]
+    public async Task TheWorker_DeletesOldEndedSessions_ButKeepsTheLiveOnes()
+    {
+        Guid oldId, liveId;
+        using (var scope = Services.CreateScope())
+        {
+            var sessions = scope.ServiceProvider.GetRequiredService<Application.Services.Repositories.IUserSessionRepository>();
+            var users = scope.ServiceProvider.GetRequiredService<Application.Services.Repositories.IApplicationUserRepository>();
+            Guid staffId = (await users.GetAsync(u => u.Email == StaffEmail, cancellationToken: Ct))!.Id;
+
+            oldId = (await sessions.AddAsync(new Domain.Entities.UserSession
+            {
+                UserId = staffId, RefreshTokenHash = BankingSystemCore.Security.Tokens.SecureToken.Hash("old"),
+                RefreshTokenExpiresAt = DateTime.UtcNow.AddDays(-30), RevokedDate = DateTime.UtcNow.AddDays(-30)
+            }, Ct)).Id;
+            liveId = (await sessions.GetAsync(s => s.UserId == staffId && s.RevokedDate == null, cancellationToken: Ct))!.Id;
+        }
+
+        // The worker runs every second; give it a few turns.
+        bool gone = false;
+        for (int i = 0; i < 20 && !gone; i++)
+        {
+            await Task.Delay(500, Ct);
+            using var scope = Services.CreateScope();
+            var sessions = scope.ServiceProvider.GetRequiredService<Application.Services.Repositories.IUserSessionRepository>();
+            gone = await sessions.GetAsync(s => s.Id == oldId, cancellationToken: Ct) is null;
+        }
+
+        gone.ShouldBeTrue();
+        using var check = Services.CreateScope();
+        (await check.ServiceProvider.GetRequiredService<Application.Services.Repositories.IUserSessionRepository>()
+            .GetAsync(s => s.Id == liveId, cancellationToken: Ct)).ShouldNotBeNull();
+    }
+}

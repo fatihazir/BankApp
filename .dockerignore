@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+.git/
+.github/
+.vscode/
+.devcontainer/
+*.md
+docs/
+tests/
+scripts/
+TestResults/
+test.cs
+.env

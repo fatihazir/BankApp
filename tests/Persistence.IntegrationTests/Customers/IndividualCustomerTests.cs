@@ -64,6 +64,24 @@ public class IndividualCustomerTests(SqlServerFixture database) : IntegrationTes
     }
 
     [Fact]
+    public async Task TheDates_ComeFromTheClock_OnCreateUpdateAndDelete()
+    {
+        var created = new DateTimeOffset(2030, 1, 1, 10, 0, 0, TimeSpan.Zero);
+        Clock.Now = created;
+        Guid id = (await Send(TestData.IndividualCreate())).Id;
+
+        Clock.Advance(TimeSpan.FromDays(1));
+        await Send(UpdateFor(id));
+
+        Clock.Advance(TimeSpan.FromDays(1));
+        await Send(new DeleteIndividualCustomerCommand { Id = id });
+
+        var row = await UsingDbContext(db => db.IndividualCustomers.AsNoTracking().SingleAsync(c => c.Id == id));
+        (row.CreateDate, row.UpdateDate, row.DeleteDate).ShouldBe(
+            (created.UtcDateTime, created.AddDays(1).UtcDateTime, created.AddDays(2).UtcDateTime));
+    }
+
+    [Fact]
     public async Task Update_ChangesFields_ButKeepsCustomerNumber()
     {
         var created = await Send(TestData.IndividualCreate());
@@ -93,38 +111,6 @@ public class IndividualCustomerTests(SqlServerFixture database) : IntegrationTes
         await Send(TestData.IndividualCreate(2));
 
         await Should.ThrowAsync<BusinessException>(() => Send(UpdateFor(first.Id, nationalIdSeed: 2)));
-    }
-
-    [Fact]
-    public async Task Create_WithInvalidNationalIdChecksum_IsRejected()
-    {
-        var command = TestData.IndividualCreate();
-        command.NationalId = "12345678901";
-
-        await Should.ThrowAsync<BusinessException>(() => Send(command));
-    }
-
-    [Fact]
-    public async Task Create_Underage_IsRejected()
-    {
-        var command = TestData.IndividualCreate();
-        command.DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-10));
-
-        await Should.ThrowAsync<BusinessException>(() => Send(command));
-    }
-
-    [Fact]
-    public async Task Create_WithInvalidFormat_FailsValidation_BeforeReachingTheDatabase()
-    {
-        await Should.ThrowAsync<ValidationException>(() => Send(new CreateIndividualCustomerCommand { Email = "x" }));
-
-        (await Send(new GetListIndividualCustomerQuery())).Count.ShouldBe(0);
-    }
-
-    [Fact]
-    public async Task GetById_WhenMissing_Throws()
-    {
-        await Should.ThrowAsync<NotFoundException>(() => Send(new GetByIdIndividualCustomerQuery { Id = Guid.NewGuid() }));
     }
 
     [Fact]

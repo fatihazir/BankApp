@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Features.Auth.Constants;
 using Application.Services.Repositories;
 using Application.Services.Security;
@@ -9,6 +10,7 @@ using MediatR;
 namespace Application.Features.Users.Commands.Unban;
 
 /// <summary>Lifts a ban. Old sessions stay ended: the user has to log in again.</summary>
+[Audit("User.Unban", "User")]
 public class UnbanUserCommand : IRequest<UnbannedUserResponse>, ISecuredRequest
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.StaffOnly;

@@ -47,7 +47,7 @@ public abstract class ApiTestBase : IAsyncLifetime
 
     protected IServiceProvider Services => _factory.Services;
 
-    protected ApiTestBase(SqlServerFixture database)
+    protected ApiTestBase(SqlServerFixture database, Dictionary<string, string?>? extraSettings = null)
     {
         _database = database;
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
@@ -59,6 +59,12 @@ public abstract class ApiTestBase : IAsyncLifetime
             builder.UseSetting("Security:Jwt:Audience", TestAudience);
             builder.UseSetting("Security:Jwt:SecurityKey", TestKey);
             builder.UseSetting("Security:PasswordHashing:Iterations", "10"); // fast hashing in tests only
+            // Every test logs in from the same address, so the rate limit is off unless a test asks for it.
+            builder.UseSetting("RateLimiting:Enabled", "false");
+            // The cleanup worker would touch the database while a test resets it; one test switches it on.
+            builder.UseSetting("Security:SessionCleanup:Enabled", "false");
+            foreach ((string key, string? value) in extraSettings ?? [])
+                builder.UseSetting(key, value);
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IEmailSender>();
@@ -113,7 +119,7 @@ public abstract class ApiTestBase : IAsyncLifetime
     /// <summary>Logs in over HTTP and returns the access token.</summary>
     protected async Task<string> LoginAsync(string email, string password)
     {
-        var response = await AnonymousClient.PostAsJsonAsync("/api/auth/login", new { email, password }, Json, Ct);
+        var response = await AnonymousClient.PostAsJsonAsync("/api/v0/auth/login", new { email, password }, Json, Ct);
         response.EnsureSuccessStatusCode();
         return (await ReadJsonAsync(response)).GetProperty("accessToken").GetString()!;
     }

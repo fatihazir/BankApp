@@ -23,6 +23,7 @@ public static partial class LoanApplicationMapper
     [MapperIgnoreTarget(nameof(LoanApplication.ApprovedAmount))]
     [MapperIgnoreTarget(nameof(LoanApplication.CreateDate))]
     [MapperIgnoreTarget(nameof(LoanApplication.UpdateDate))]
+    [MapperIgnoreTarget(nameof(LoanApplication.RowVersion))]
     [MapperIgnoreTarget(nameof(LoanApplication.DeleteDate))]
     [MapperIgnoreTarget(nameof(LoanApplication.Customer))]
     [MapperIgnoreTarget(nameof(LoanApplication.LoanSubType))]

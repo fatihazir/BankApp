@@ -18,7 +18,7 @@ public class RefreshAndLogoutTests
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private RefreshTokenCommandHandler Refresh() => new(_f.Sessions, _f.Users, _f.Issuer, _f.Time, _f.EmailOptionsAccessor);
+    private RefreshTokenCommandHandler Refresh() => new(_f.Sessions, _f.Users, _f.Issuer, _f.Time, _f.EmailOptionsAccessor, _f.Audit);
 
     private static string Sid(string accessToken) =>
         new JsonWebTokenHandler().ReadJsonWebToken(accessToken).GetClaim("sid").Value;
@@ -27,7 +27,7 @@ public class RefreshAndLogoutTests
     private async Task<LoginResponse> LoginAsync(ApplicationUser? user = null)
     {
         user = _f.UserIs(user ?? _f.Staff());
-        var login = await new LoginCommandHandler(_f.Users, _f.Hasher, _f.Issuer, _f.Time, _f.EmailOptionsAccessor)
+        var login = await new LoginCommandHandler(_f.Users, _f.Hasher, _f.Issuer, _f.Time, _f.EmailOptionsAccessor, _f.Audit)
             .Handle(new LoginCommand { Email = user.Email, Password = AuthFixture.Password }, Ct);
         _f.SessionIs(_f.LastCreatedSession);
         return login;

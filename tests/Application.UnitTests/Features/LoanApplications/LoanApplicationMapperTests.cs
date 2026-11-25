@@ -16,7 +16,7 @@ public class LoanApplicationMapperTests
     [
         nameof(LoanApplication.Id), nameof(LoanApplication.ApplicationNumber), nameof(LoanApplication.AnnualInterestRate),
         nameof(LoanApplication.Status), nameof(LoanApplication.DecisionDate), nameof(LoanApplication.DecisionReason),
-        nameof(LoanApplication.ApprovedAmount), nameof(LoanApplication.CreateDate), nameof(LoanApplication.UpdateDate),
+        nameof(LoanApplication.ApprovedAmount), nameof(LoanApplication.CreateDate), nameof(LoanApplication.UpdateDate), nameof(LoanApplication.RowVersion),
         nameof(LoanApplication.DeleteDate), nameof(LoanApplication.Customer), nameof(LoanApplication.LoanSubType)
     ];
 

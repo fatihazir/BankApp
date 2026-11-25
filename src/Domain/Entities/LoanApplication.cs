@@ -38,4 +38,7 @@ public class LoanApplication : Entity<Guid>
     public string? DecisionReason { get; set; }
 
     public decimal? ApprovedAmount { get; set; }
+
+    /// <summary>Concurrency token: two people deciding on the same application at once cannot both win.</summary>
+    public byte[] RowVersion { get; set; } = [];
 }

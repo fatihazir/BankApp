@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Services.Security;
 using BankingSystemCore.Application.Pipelines.Authorization;
 using Application.Features.LoanApplications.Profiles;
@@ -8,9 +9,12 @@ using MediatR;
 
 namespace Application.Features.LoanApplications.Commands.Approve;
 
-public class ApproveLoanApplicationCommand : IRequest<LoanApplicationStatusResponse>, ISecuredRequest
+[Audit("LoanApplication.Approve", "LoanApplication")]
+public class ApproveLoanApplicationCommand : IRequest<LoanApplicationStatusResponse>, ISecuredRequest, IAuditDetail
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.StaffOnly;
+
+    string? IAuditDetail.AuditDetail => $"Approved amount {ApprovedAmount}" + (string.IsNullOrWhiteSpace(Reason) ? "" : $". {Reason}");
 
     public Guid Id { get; set; }
     public decimal ApprovedAmount { get; set; }
@@ -21,11 +25,13 @@ public class ApproveLoanApplicationCommandHandler : IRequestHandler<ApproveLoanA
 {
     private readonly ILoanApplicationRepository _applications;
     private readonly LoanApplicationBusinessRules _rules;
+    private readonly TimeProvider _time;
 
-    public ApproveLoanApplicationCommandHandler(ILoanApplicationRepository applications, LoanApplicationBusinessRules rules)
+    public ApproveLoanApplicationCommandHandler(ILoanApplicationRepository applications, LoanApplicationBusinessRules rules, TimeProvider time)
     {
         _applications = applications;
         _rules = rules;
+        _time = time;
     }
 
     public async Task<LoanApplicationStatusResponse> Handle(
@@ -37,7 +43,7 @@ public class ApproveLoanApplicationCommandHandler : IRequestHandler<ApproveLoanA
         _rules.StatusMustBe(application!, LoanApplicationStatus.UnderReview);
         _rules.ApprovedAmountMustBeValid(application!, request.ApprovedAmount);
         application!.Status = LoanApplicationStatus.Approved;
-        application.DecisionDate = DateTime.UtcNow;
+        application.DecisionDate = _time.GetUtcNow().UtcDateTime;
         application.ApprovedAmount = request.ApprovedAmount;
         application.DecisionReason = request.Reason;
 

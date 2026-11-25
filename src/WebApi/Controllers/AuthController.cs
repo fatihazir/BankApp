@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using Application.Features.Auth.Commands.Login;
 using Application.Features.Auth.Commands.Logout;
 using Application.Features.Auth.Commands.Refresh;
@@ -7,11 +8,14 @@ using Application.Features.Auth.Queries.Me;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using WebApi.Infrastructure;
 
 namespace WebApi.Controllers;
 
 [ApiController]
-[Route("api/auth")]
+[ApiVersion("0")]
+[Route("api/v{version:apiVersion}/auth")]
 public class AuthController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -26,6 +30,7 @@ public class AuthController : ControllerBase
     /// <c>Authorization: Bearer {accessToken}</c>.
     /// </summary>
     [HttpPost("login")]
+    [EnableRateLimiting(HostHardening.AnonymousAuthPolicy)]
     [AllowAnonymous]
     [ProducesResponseType<LoginResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -38,6 +43,7 @@ public class AuthController : ControllerBase
     /// using an old one again ends the whole session.
     /// </summary>
     [HttpPost("refresh")]
+    [EnableRateLimiting(HostHardening.AnonymousAuthPolicy)]
     [AllowAnonymous]
     [ProducesResponseType<LoginResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
@@ -73,6 +79,7 @@ public class AuthController : ControllerBase
 
     /// <summary>Confirms the e-mail address with the token from the e-mail. The token works once.</summary>
     [HttpPost("verify-email")]
+    [EnableRateLimiting(HostHardening.AnonymousAuthPolicy)]
     [AllowAnonymous]
     [ProducesResponseType<VerifiedEmailResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]

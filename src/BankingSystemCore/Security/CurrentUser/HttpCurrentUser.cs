@@ -30,6 +30,8 @@ public class HttpCurrentUser : ICurrentUser
             .ToArray()
         ?? [];
 
+    public string? IpAddress => _accessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+
     public bool IsInRole(string role) => Roles.Contains(role);
 
     public string? FindClaim(string claimType) => IsAuthenticated ? Principal!.FindFirst(claimType)?.Value : null;

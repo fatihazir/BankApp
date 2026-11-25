@@ -11,6 +11,7 @@ public sealed class FakeCurrentUser : ICurrentUser
     public string? Email { get; private init; }
     public Guid? SessionId { get; private init; }
     public IReadOnlyCollection<string> Roles { get; private init; } = [];
+    public string? IpAddress => "203.0.113.7";
 
     public bool IsInRole(string role) => Roles.Contains(role);
 

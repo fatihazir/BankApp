@@ -14,6 +14,9 @@ public interface ICurrentUser
 
     IReadOnlyCollection<string> Roles { get; }
 
+    /// <summary>Where the request came from (the real client address behind a trusted proxy). Null outside a web request.</summary>
+    string? IpAddress { get; }
+
     bool IsInRole(string role);
 
     /// <summary>The value of a claim of the token, or null when it is not there.</summary>

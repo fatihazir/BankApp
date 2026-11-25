@@ -10,10 +10,12 @@ public class IndividualCustomerBusinessRules
     private const int MinimumAge = 18;
 
     private readonly IIndividualCustomerRepository _repository;
+    private readonly TimeProvider _time;
 
-    public IndividualCustomerBusinessRules(IIndividualCustomerRepository repository)
+    public IndividualCustomerBusinessRules(IIndividualCustomerRepository repository, TimeProvider time)
     {
         _repository = repository;
+        _time = time;
     }
 
     public void CustomerShouldExist(IndividualCustomer? customer)
@@ -42,7 +44,7 @@ public class IndividualCustomerBusinessRules
 
     public void CustomerMustBeAdult(DateOnly dateOfBirth)
     {
-        DateOnly today = DateOnly.FromDateTime(DateTime.UtcNow);
+        DateOnly today = DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime);
         if (dateOfBirth > today.AddYears(-MinimumAge))
             throw new BusinessException(IndividualCustomersMessages.CustomerMustBeAdult);
     }

@@ -7,7 +7,7 @@ namespace Persistence.Repositories;
 
 public class CustomerRepository : EfRepositoryBase<Customer, Guid, BankAppDbContext>, ICustomerRepository
 {
-    public CustomerRepository(BankAppDbContext context) : base(context)
+    public CustomerRepository(BankAppDbContext context, TimeProvider time) : base(context, time)
     {
     }
 }

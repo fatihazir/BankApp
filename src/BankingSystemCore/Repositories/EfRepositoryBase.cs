@@ -14,10 +14,16 @@ public class EfRepositoryBase<TEntity, TId, TContext> : IAsyncRepository<TEntity
 {
     protected TContext Context { get; }
 
-    public EfRepositoryBase(TContext context)
+    /// <summary>The clock behind CreateDate, UpdateDate and DeleteDate. Injected so that tests control time.</summary>
+    protected TimeProvider Time { get; }
+
+    public EfRepositoryBase(TContext context, TimeProvider time)
     {
         Context = context;
+        Time = time;
     }
+
+    private DateTime Now() => Time.GetUtcNow().UtcDateTime;
 
     protected IQueryable<TEntity> Query() => Context.Set<TEntity>();
 
@@ -85,7 +91,7 @@ public class EfRepositoryBase<TEntity, TId, TContext> : IAsyncRepository<TEntity
 
     public async Task<TEntity> AddAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
-        entity.CreateDate = DateTime.UtcNow;
+        entity.CreateDate = Now();
         await Context.AddAsync(entity, cancellationToken);
         await Context.SaveChangesAsync(cancellationToken);
         return entity;
@@ -93,7 +99,7 @@ public class EfRepositoryBase<TEntity, TId, TContext> : IAsyncRepository<TEntity
 
     public async Task<ICollection<TEntity>> AddRangeAsync(ICollection<TEntity> entities, CancellationToken cancellationToken = default)
     {
-        DateTime now = DateTime.UtcNow;
+        DateTime now = Now();
         foreach (TEntity entity in entities) entity.CreateDate = now;
         await Context.AddRangeAsync(entities, cancellationToken);
         await Context.SaveChangesAsync(cancellationToken);
@@ -102,7 +108,7 @@ public class EfRepositoryBase<TEntity, TId, TContext> : IAsyncRepository<TEntity
 
     public async Task<TEntity> UpdateAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
-        entity.UpdateDate = DateTime.UtcNow;
+        entity.UpdateDate = Now();
         Context.Update(entity);
         await Context.SaveChangesAsync(cancellationToken);
         return entity;
@@ -110,7 +116,7 @@ public class EfRepositoryBase<TEntity, TId, TContext> : IAsyncRepository<TEntity
 
     public async Task<ICollection<TEntity>> UpdateRangeAsync(ICollection<TEntity> entities, CancellationToken cancellationToken = default)
     {
-        DateTime now = DateTime.UtcNow;
+        DateTime now = Now();
         foreach (TEntity entity in entities) entity.UpdateDate = now;
         Context.UpdateRange(entities);
         await Context.SaveChangesAsync(cancellationToken);
@@ -131,7 +137,7 @@ public class EfRepositoryBase<TEntity, TId, TContext> : IAsyncRepository<TEntity
         }
         else
         {
-            DateTime now = DateTime.UtcNow;
+            DateTime now = Now();
             foreach (TEntity entity in entities) entity.DeleteDate = now;
             Context.UpdateRange(entities);
         }

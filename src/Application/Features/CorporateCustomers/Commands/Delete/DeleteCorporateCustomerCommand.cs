@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Services.Security;
 using BankingSystemCore.Application.Pipelines.Authorization;
 using Application.Features.CorporateCustomers.Profiles;
@@ -8,6 +9,7 @@ using MediatR;
 
 namespace Application.Features.CorporateCustomers.Commands.Delete;
 
+[Audit("Customer.Corporate.Delete", "CorporateCustomer")]
 public class DeleteCorporateCustomerCommand : IRequest<DeletedCorporateCustomerResponse>, ISecuredRequest
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.StaffOnly;

@@ -17,7 +17,7 @@ public class CreateCorporateCustomerCommandValidatorTests
         Country = "TR",
         CompanyName = "Acme",
         TaxNumber = "1234567890",
-        TaxOffice = "Kadikoy",
+        TaxOffice = "Central Tax Office",
         FoundationDate = new DateOnly(2010, 5, 1),
         EmployeeCount = 50,
         AnnualRevenue = 1_000_000m,

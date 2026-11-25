@@ -103,4 +103,26 @@ public class LoanSchemaTests(SqlServerFixture database) : IntegrationTestBase(da
 
         (stored.RequestedAmount, stored.ApprovedAmount, stored.AnnualInterestRate).ShouldBe((12_345.67m, 9_876.54m, 42.75m));
     }
+
+    [Fact]
+    public async Task TwoDecisionsOnTheSameApplication_CannotBothWin()
+    {
+        Guid customerId = (await Send(TestData.IndividualCreate())).Id;
+        Guid id = (await Send(new Application.Features.LoanApplications.Commands.Create.CreateLoanApplicationCommand
+        {
+            CustomerId = customerId, LoanSubTypeId = LoanSeedData.PersonalLoanId, RequestedAmount = 10_000, TermInMonths = 12
+        })).Id;
+
+        // Two staff members open the same application before either one saves.
+        using var scopeA = ScopedDb(out var dbA);
+        using var scopeB = ScopedDb(out var dbB);
+        var forApprover = await dbA.LoanApplications.SingleAsync(a => a.Id == id, TestContext.Current.CancellationToken);
+        var forRejecter = await dbB.LoanApplications.SingleAsync(a => a.Id == id, TestContext.Current.CancellationToken);
+
+        forApprover.Status = LoanApplicationStatus.Approved;
+        await dbA.SaveChangesAsync(TestContext.Current.CancellationToken);
+        forRejecter.Status = LoanApplicationStatus.Rejected;
+
+        await Should.ThrowAsync<DbUpdateConcurrencyException>(() => dbB.SaveChangesAsync(TestContext.Current.CancellationToken));
+    }
 }

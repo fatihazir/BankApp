@@ -1,7 +1,9 @@
 using BankingSystemCore.CrossCuttingConcerns.Exceptions.Handlers;
 using BankingSystemCore.CrossCuttingConcerns.Exceptions.Types;
+using BankingSystemCore.Repositories;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace BankingSystemCore.CrossCuttingConcerns.Exceptions.Middlewares;
@@ -32,13 +34,13 @@ public class ExceptionMiddleware
             if (context.Response.HasStarted)
                 throw;
 
-            await HandleExceptionAsync(context.Response, exception);
+            await HandleExceptionAsync(context, exception);
         }
     }
 
-    private Task HandleExceptionAsync(HttpResponse response, Exception exception)
+    private Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
-        var handler = new HttpExceptionHandler { Response = response };
+        var handler = new HttpExceptionHandler { Response = context.Response };
 
         switch (exception)
         {
@@ -54,9 +56,15 @@ public class ExceptionMiddleware
                 return handler.HandleException(e);
             case ConflictException e:
                 return handler.HandleException(e);
+            case TooManyRequestsException e:
+                return handler.HandleException(e);
             case DbUpdateConcurrencyException:
                 // Somebody changed the same row between our read and our write. Nothing was saved.
                 return handler.HandleException(new ConflictException("The data was changed by someone else. Reload it and try again."));
+            case DbUpdateException e when context.RequestServices?.GetService<IUniqueViolationDetector>()?.IsUniqueViolation(e) == true:
+                // Two requests created the same unique value at once and the other one won. The message must not
+                // name the index or echo the value, which the database error text does.
+                return handler.HandleException(new ConflictException("A record with the same unique value already exists."));
             default:
                 _logger.LogError(exception, "Unhandled exception");
                 return handler.HandleException(exception);

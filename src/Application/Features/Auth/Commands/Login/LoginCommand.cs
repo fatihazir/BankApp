@@ -1,5 +1,6 @@
 using Application.Features.Auth.Constants;
 using Application.Features.Auth.Rules;
+using Application.Services.Auditing;
 using Application.Services.Repositories;
 using Application.Services.Security;
 using BankingSystemCore.CrossCuttingConcerns.Exceptions.Types;
@@ -27,11 +28,13 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
     private readonly AuthTokenIssuer _issuer;
     private readonly TimeProvider _time;
     private readonly EmailVerificationOptions _emailOptions;
+    private readonly SecurityAudit _audit;
 
     public LoginCommandHandler(
         IApplicationUserRepository users, IPasswordHasher hasher, AuthTokenIssuer issuer, TimeProvider time,
-        IOptions<EmailVerificationOptions> emailOptions)
+        IOptions<EmailVerificationOptions> emailOptions, SecurityAudit audit)
     {
+        _audit = audit;
         _users = users;
         _hasher = hasher;
         _issuer = issuer;
@@ -58,6 +61,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
 
         if (!user.IsActive || !_hasher.Verify(request.Password, user.PasswordHash))
         {
+            await _audit.LoginFailedAsync(user, user.IsActive ? "InvalidPassword" : "AccountInactive", cancellationToken);
             await RegisterFailedAttemptAsync(user, now, cancellationToken);
             throw new AuthenticationException(AuthMessages.InvalidCredentials);
         }
@@ -70,6 +74,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
         user.LockoutEnd = null;
         user.LastLoginDate = now;
         await _users.UpdateAsync(user, cancellationToken);
+        await _audit.LoginSucceededAsync(user, cancellationToken);
 
         return await _issuer.StartSessionAsync(user, cancellationToken);
     }
@@ -82,6 +87,9 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
         {
             user.LockoutEnd = now.Add(AuthBusinessRules.LockoutDuration);
             user.FailedLoginCount = 0;
+            await _users.UpdateAsync(user, cancellationToken);
+            await _audit.LockedOutAsync(user, user.LockoutEnd.Value, cancellationToken);
+            return;
         }
 
         await _users.UpdateAsync(user, cancellationToken);

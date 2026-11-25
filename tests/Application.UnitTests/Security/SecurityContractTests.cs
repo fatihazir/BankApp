@@ -25,7 +25,7 @@ public class SecurityContractTests
         ((ISecuredRequest)Activator.CreateInstance(request)!).Roles;
 
     [Fact]
-    public void ThereAreRequestsToCheck() => AllRequests.Length.ShouldBe(31);
+    public void ThereAreRequestsToCheck() => AllRequests.Length.ShouldBe(32);
 
     [Fact]
     public void EveryRequest_IsSecured_UnlessItIsDeliberatelyOpen()
@@ -76,6 +76,7 @@ public class SecurityContractTests
     [InlineData("BanUserCommand", "BankStaff")]
     [InlineData("UnbanUserCommand", "BankStaff")]
     [InlineData("GetListUserQuery", "BankStaff")]
+    [InlineData("GetListAuditLogQuery", "BankStaff")]
     // Customers and staff: a customer's own data (ownership is checked in the handler).
     [InlineData("GetByIdIndividualCustomerQuery", "BankStaff,Customer")]
     [InlineData("UpdateIndividualCustomerCommand", "BankStaff,Customer")]
@@ -108,7 +109,7 @@ public class SecurityContractTests
             "CreateIndividualCustomerCommand", "DeleteIndividualCustomerCommand", "GetListIndividualCustomerQuery",
             "CreateCorporateCustomerCommand", "DeleteCorporateCustomerCommand", "GetListCorporateCustomerQuery",
             "StartReviewLoanApplicationCommand", "ApproveLoanApplicationCommand", "RejectLoanApplicationCommand",
-            "CreateLoanTypeCommand", "CreateLoanSubTypeCommand", "CreateStaffUserCommand", "BanUserCommand", "UnbanUserCommand", "GetListUserQuery",
+            "CreateLoanTypeCommand", "CreateLoanSubTypeCommand", "CreateStaffUserCommand", "BanUserCommand", "UnbanUserCommand", "GetListUserQuery", "GetListAuditLogQuery",
             "GetByIdIndividualCustomerQuery", "UpdateIndividualCustomerCommand", "GetByIdCorporateCustomerQuery",
             "UpdateCorporateCustomerCommand", "CreateLoanApplicationCommand", "GetByIdLoanApplicationQuery",
             "GetListLoanApplicationQuery", "CancelLoanApplicationCommand", "CalculateLoanQuery", "GetListLoanTypeQuery", "MeQuery",

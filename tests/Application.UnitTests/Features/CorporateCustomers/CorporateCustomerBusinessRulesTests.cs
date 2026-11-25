@@ -3,6 +3,7 @@ using Application.Features.CorporateCustomers.Rules;
 using Application.Services.Repositories;
 using BankingSystemCore.CrossCuttingConcerns.Exceptions.Types;
 using Domain.Entities;
+using Application.UnitTests.Support;
 using NSubstitute;
 
 namespace Application.UnitTests.Features.CorporateCustomers;
@@ -10,11 +11,12 @@ namespace Application.UnitTests.Features.CorporateCustomers;
 public class CorporateCustomerBusinessRulesTests
 {
     private readonly ICorporateCustomerRepository _repository = Substitute.For<ICorporateCustomerRepository>();
+    private readonly TestClock _clock = new(); // 2026-11-15
     private readonly CorporateCustomerBusinessRules _rules;
 
     public CorporateCustomerBusinessRulesTests()
     {
-        _rules = new CorporateCustomerBusinessRules(_repository);
+        _rules = new CorporateCustomerBusinessRules(_repository, _clock);
     }
 
     [Fact]
@@ -44,14 +46,18 @@ public class CorporateCustomerBusinessRulesTests
     [Fact]
     public void FoundationDateCannotBeInFuture_Accepts_Today()
     {
-        Should.NotThrow(() => _rules.FoundationDateCannotBeInFuture(DateOnly.FromDateTime(DateTime.UtcNow)));
+        Should.NotThrow(() => _rules.FoundationDateCannotBeInFuture(new DateOnly(2026, 11, 15)));
     }
 
     [Fact]
     public void FoundationDateCannotBeInFuture_Rejects_FutureDate()
     {
-        DateOnly tomorrow = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+        var tomorrow = new DateOnly(2026, 11, 16);
         Should.Throw<BusinessException>(() => _rules.FoundationDateCannotBeInFuture(tomorrow));
+
+        _clock.Advance(TimeSpan.FromDays(1)); // tomorrow has become today
+
+        Should.NotThrow(() => _rules.FoundationDateCannotBeInFuture(tomorrow));
     }
 
     [Fact]

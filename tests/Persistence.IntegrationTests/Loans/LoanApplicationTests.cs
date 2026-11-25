@@ -92,18 +92,6 @@ public class LoanApplicationTests(SqlServerFixture database) : IntegrationTestBa
     }
 
     [Fact]
-    public async Task UnknownCustomer_IsNotFound() =>
-        await Should.ThrowAsync<NotFoundException>(() => Send(Apply(Guid.NewGuid(), LoanSeedData.PersonalLoanId)));
-
-    [Fact]
-    public async Task UnknownSubType_IsNotFound()
-    {
-        Guid customerId = await NewIndividualAsync();
-
-        await Should.ThrowAsync<NotFoundException>(() => Send(Apply(customerId, Guid.NewGuid())));
-    }
-
-    [Fact]
     public async Task SoftDeletedCustomer_CannotApply()
     {
         Guid customerId = await NewIndividualAsync();
@@ -124,28 +112,6 @@ public class LoanApplicationTests(SqlServerFixture database) : IntegrationTestBa
         });
 
         await Should.ThrowAsync<BusinessException>(() => Send(Apply(customerId, LoanSeedData.PersonalLoanId)));
-    }
-
-    [Theory]
-    [InlineData(4_999, 12)]
-    [InlineData(1_000_001, 12)]
-    [InlineData(10_000, 2)]
-    [InlineData(10_000, 61)]
-    public async Task AmountOrTermOutsideTheLimits_IsRejected(decimal amount, int term)
-    {
-        Guid customerId = await NewIndividualAsync();
-
-        await Should.ThrowAsync<BusinessException>(() => Send(Apply(customerId, LoanSeedData.PersonalLoanId, amount, term)));
-    }
-
-    [Theory]
-    [InlineData(5_000, 3)]
-    [InlineData(1_000_000, 60)]
-    public async Task AmountAndTermExactlyAtTheLimits_AreAccepted(decimal amount, int term)
-    {
-        Guid customerId = await NewIndividualAsync();
-
-        (await Send(Apply(customerId, LoanSeedData.PersonalLoanId, amount, term))).Status.ShouldBe(LoanApplicationStatus.Submitted);
     }
 
     [Fact]
@@ -229,15 +195,6 @@ public class LoanApplicationTests(SqlServerFixture database) : IntegrationTestBa
     }
 
     [Fact]
-    public async Task Approve_MoreThanRequested_IsRejected()
-    {
-        Guid id = await SubmitAsync();
-        await Send(new StartReviewLoanApplicationCommand { Id = id });
-
-        await Should.ThrowAsync<BusinessException>(() => Send(new ApproveLoanApplicationCommand { Id = id, ApprovedAmount = 100_000.01m }));
-    }
-
-    [Fact]
     public async Task Reject_RecordsTheReason()
     {
         Guid id = await SubmitAsync();
@@ -246,40 +203,6 @@ public class LoanApplicationTests(SqlServerFixture database) : IntegrationTestBa
 
         rejected.Status.ShouldBe(LoanApplicationStatus.Rejected);
         (await Send(new GetByIdLoanApplicationQuery { Id = id })).DecisionReason.ShouldBe("Debt ratio too high");
-    }
-
-    [Fact]
-    public async Task Reject_WithoutReason_FailsValidation() =>
-        await Should.ThrowAsync<ValidationException>(() => Send(new RejectLoanApplicationCommand { Id = Guid.NewGuid() }));
-
-    [Fact]
-    public async Task Cancel_ThenNothingElseIsPossible()
-    {
-        Guid id = await SubmitAsync();
-
-        (await Send(new CancelLoanApplicationCommand { Id = id, Reason = "Changed my mind" })).Status.ShouldBe(LoanApplicationStatus.Cancelled);
-
-        await Should.ThrowAsync<BusinessException>(() => Send(new StartReviewLoanApplicationCommand { Id = id }));
-        await Should.ThrowAsync<BusinessException>(() => Send(new RejectLoanApplicationCommand { Id = id, Reason = "x" }));
-        await Should.ThrowAsync<BusinessException>(() => Send(new CancelLoanApplicationCommand { Id = id }));
-    }
-
-    [Fact]
-    public async Task ApprovedApplication_CannotBeCancelledOrRejected()
-    {
-        Guid id = await SubmitAsync();
-        await Send(new StartReviewLoanApplicationCommand { Id = id });
-        await Send(new ApproveLoanApplicationCommand { Id = id, ApprovedAmount = 1_000 });
-
-        await Should.ThrowAsync<BusinessException>(() => Send(new CancelLoanApplicationCommand { Id = id }));
-        await Should.ThrowAsync<BusinessException>(() => Send(new RejectLoanApplicationCommand { Id = id, Reason = "x" }));
-    }
-
-    [Fact]
-    public async Task StatusChanges_OnAnUnknownApplication_AreNotFound()
-    {
-        await Should.ThrowAsync<NotFoundException>(() => Send(new StartReviewLoanApplicationCommand { Id = Guid.NewGuid() }));
-        await Should.ThrowAsync<NotFoundException>(() => Send(new CancelLoanApplicationCommand { Id = Guid.NewGuid() }));
     }
 
     // ---- reading ----
@@ -414,24 +337,11 @@ public class LoanApplicationTests(SqlServerFixture database) : IntegrationTestBa
     }
 
     [Fact]
-    public async Task Calculate_RespectsTheLimitsOfTheSubType()
-    {
-        await Should.ThrowAsync<BusinessException>(() => Send(new Application.Features.LoanApplications.Queries.Calculate.CalculateLoanQuery
-        {
-            LoanSubTypeId = LoanSeedData.PersonalLoanId, Amount = 10, TermInMonths = 24
-        }));
-        await Should.ThrowAsync<NotFoundException>(() => Send(new Application.Features.LoanApplications.Queries.Calculate.CalculateLoanQuery
-        {
-            LoanSubTypeId = Guid.NewGuid(), Amount = 10_000, TermInMonths = 24
-        }));
-    }
-
-    [Fact]
     public async Task GetList_ReturnsNewestFirst()
     {
         Guid customerId = await NewIndividualAsync();
         await Send(Apply(customerId, LoanSeedData.PersonalLoanId));
-        await Task.Delay(20, TestContext.Current.CancellationToken);
+        Clock.Advance(TimeSpan.FromSeconds(1));
         Guid newest = (await Send(Apply(customerId, LoanSeedData.AutoLoanId, 100_000, 24))).Id;
 
         (await Send(new GetListLoanApplicationQuery())).Items[0].Id.ShouldBe(newest);

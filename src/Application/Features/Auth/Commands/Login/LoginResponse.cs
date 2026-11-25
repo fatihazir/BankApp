@@ -9,7 +9,7 @@ public class LoginResponse
     public string TokenType { get; set; } = "Bearer";
     public DateTime ExpiresAt { get; set; }
 
-    /// <summary>Exchange it for a new token pair at <c>POST /api/auth/refresh</c>. It can be used once.</summary>
+    /// <summary>Exchange it for a new token pair at <c>POST /api/v0/auth/refresh</c>. It can be used once.</summary>
     public string RefreshToken { get; set; } = string.Empty;
     public DateTime RefreshTokenExpiresAt { get; set; }
 

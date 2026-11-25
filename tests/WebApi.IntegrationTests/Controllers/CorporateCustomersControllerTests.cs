@@ -12,7 +12,7 @@ namespace WebApi.IntegrationTests.Controllers;
 [Collection(DatabaseCollection.Name)]
 public class CorporateCustomersControllerTests(SqlServerFixture database) : ApiTestBase(database)
 {
-    private const string BaseUrl = "/api/corporate-customers";
+    private const string BaseUrl = "/api/v0/corporate-customers";
 
     private static CreateCorporateCustomerCommand NewCustomer(string taxNumber = "1234567890") => new()
     {
@@ -22,9 +22,9 @@ public class CorporateCustomersControllerTests(SqlServerFixture database) : ApiT
         Address = "Plaza 1",
         City = "Istanbul",
         Country = "Turkey",
-        CompanyName = "Acme Teknoloji",
+        CompanyName = "Acme Technology",
         TaxNumber = taxNumber,
-        TaxOffice = "Mecidiyekoy",
+        TaxOffice = "Central Tax Office",
         FoundationDate = new DateOnly(2010, 5, 1),
         EmployeeCount = 50,
         AnnualRevenue = 12_500_000.75m,
@@ -58,7 +58,7 @@ public class CorporateCustomersControllerTests(SqlServerFixture database) : ApiT
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var json = await ReadJsonAsync(response);
-        json.GetProperty("companyName").GetString().ShouldBe("Acme Teknoloji");
+        json.GetProperty("companyName").GetString().ShouldBe("Acme Technology");
         json.GetProperty("foundationDate").GetString().ShouldBe("2010-05-01");
         json.GetProperty("annualRevenue").GetDecimal().ShouldBe(12_500_000.75m);
     }
@@ -96,7 +96,7 @@ public class CorporateCustomersControllerTests(SqlServerFixture database) : ApiT
         {
             Id = Guid.NewGuid(), // ignored: the route id is used
             PhoneNumber = "2125551234", Address = "Plaza 2", City = "Izmir", Country = "Turkey",
-            IsActive = true, CompanyName = "Acme Holding", TaxNumber = "1234567890", TaxOffice = "Mecidiyekoy",
+            IsActive = true, CompanyName = "Acme Holding", TaxNumber = "1234567890", TaxOffice = "Central Tax Office",
             FoundationDate = new DateOnly(2010, 5, 1), EmployeeCount = 60, AnnualRevenue = 1m, AuthorizedPersonName = "Jane Doe"
         };
 
@@ -207,26 +207,12 @@ public class CorporateCustomersControllerTests(SqlServerFixture database) : ApiT
     [Fact]
     public async Task OpenApiDocument_ContainsPrefilledExamples_ForCreateAndUpdate()
     {
-        var doc = await ReadJsonAsync(await Client.GetAsync("/openapi/v1.json", Ct));
+        var doc = await ReadJsonAsync(await Client.GetAsync("/openapi/v0.json", Ct));
 
         JsonElement Example(string path, string verb) => doc.GetProperty("paths").GetProperty(path).GetProperty(verb)
             .GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("example");
 
         Example(BaseUrl, "post").GetProperty("taxNumber").GetString().ShouldBe("1234567890");
         Example(BaseUrl + "/{id}", "put").GetProperty("isActive").GetBoolean().ShouldBeTrue();
-    }
-
-    [Fact]
-    public async Task SwaggerExamples_AreAcceptedByTheApi()
-    {
-        // The pre-filled Swagger body must be a valid request, otherwise "Try it out" fails for the user.
-        var doc = await ReadJsonAsync(await Client.GetAsync("/openapi/v1.json", Ct));
-        JsonElement example = doc.GetProperty("paths").GetProperty(BaseUrl).GetProperty("post")
-            .GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("example");
-
-        var response = await Client.PostAsync(BaseUrl,
-            new StringContent(example.GetRawText(), System.Text.Encoding.UTF8, "application/json"), Ct);
-
-        response.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 }

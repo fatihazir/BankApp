@@ -20,6 +20,7 @@ public class LoanApplicationConfiguration : IEntityTypeConfiguration<LoanApplica
         builder.Property(a => a.DecisionReason).HasMaxLength(1000);
         builder.Property(a => a.Status).IsRequired().HasConversion<int>();
         builder.Property(a => a.CreateDate).IsRequired();
+        builder.Property(a => a.RowVersion).IsRowVersion();
 
         builder.HasIndex(a => a.ApplicationNumber).IsUnique();
         builder.HasIndex(a => a.CustomerId);

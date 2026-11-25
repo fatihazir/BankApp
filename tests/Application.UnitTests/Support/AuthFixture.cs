@@ -1,6 +1,8 @@
 using System.Linq.Expressions;
 using Application.Services.Repositories;
 using Application.Services.Security;
+using Application.Services.Auditing;
+using BankingSystemCore.Application.Pipelines.Auditing;
 using BankingSystemCore.Mailing;
 using BankingSystemCore.Security.Hashing;
 using BankingSystemCore.Security.Jwt;
@@ -8,6 +10,7 @@ using Domain.Entities;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace Application.UnitTests.Support;
@@ -31,6 +34,8 @@ public sealed class AuthFixture
 
     public IApplicationUserRepository Users { get; } = Substitute.For<IApplicationUserRepository>();
     public IUserSessionRepository Sessions { get; } = Substitute.For<IUserSessionRepository>();
+    public IAuditWriter AuditWriter { get; } = Substitute.For<IAuditWriter>();
+    public SecurityAudit Audit { get; }
     public IEmailSender Sender { get; } = Substitute.For<IEmailSender>();
     public IPasswordHasher Hasher { get; } = new Pbkdf2PasswordHasher(Options.Create(new PasswordHashingOptions { Iterations = 10 }));
     public MutableTime Time { get; } = new(new DateTimeOffset(2026, 11, 15, 12, 0, 0, TimeSpan.Zero));
@@ -45,6 +50,7 @@ public sealed class AuthFixture
     {
         Issuer = new AuthTokenIssuer(Sessions, new JwtHelper(Options.Create(TokenSettings), Time), Options.Create(TokenSettings), Time);
         Verification = new EmailVerificationService(Sender, Options.Create(EmailOptions), Time);
+        Audit = new SecurityAudit(AuditWriter, FakeCurrentUser.Anonymous(), NullLogger<SecurityAudit>.Instance);
 
         Sessions.AddAsync(Arg.Any<UserSession>(), Arg.Any<CancellationToken>()).Returns(call =>
         {

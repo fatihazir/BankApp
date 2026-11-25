@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Services.Repositories;
 using Application.Services.Security;
 using BankingSystemCore.Application.Pipelines.Authorization;
@@ -8,6 +9,7 @@ using MediatR;
 namespace Application.Features.Auth.Commands.Logout;
 
 /// <summary>Ends the session of the current token. The access token stops working at once.</summary>
+[Audit("Auth.Logout", "UserSession")]
 public class LogoutCommand : IRequest, ISecuredRequest
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.AnyAuthenticated;

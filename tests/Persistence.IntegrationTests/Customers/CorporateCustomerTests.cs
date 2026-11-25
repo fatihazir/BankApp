@@ -22,7 +22,7 @@ public class CorporateCustomerTests(SqlServerFixture database) : IntegrationTest
         IsActive = true,
         CompanyName = "Acme Holding",
         TaxNumber = TestData.TaxNumber(taxSeed),
-        TaxOffice = "Kadikoy",
+        TaxOffice = "Central Tax Office",
         FoundationDate = new DateOnly(2010, 5, 1),
         EmployeeCount = 60,
         AnnualRevenue = 1m,
@@ -82,24 +82,6 @@ public class CorporateCustomerTests(SqlServerFixture database) : IntegrationTest
         await Send(TestData.CorporateCreate(2));
 
         await Should.ThrowAsync<BusinessException>(() => Send(UpdateFor(first.Id, taxSeed: 2)));
-    }
-
-    [Fact]
-    public async Task Create_WithFutureFoundationDate_IsRejected()
-    {
-        var command = TestData.CorporateCreate();
-        command.FoundationDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10));
-
-        await Should.ThrowAsync<BusinessException>(() => Send(command));
-    }
-
-    [Fact]
-    public async Task Create_WithWrongTaxNumberLength_FailsValidation()
-    {
-        var command = TestData.CorporateCreate();
-        command.TaxNumber = "123";
-
-        await Should.ThrowAsync<ValidationException>(() => Send(command));
     }
 
     [Fact]

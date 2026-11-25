@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Features.CorporateCustomers.Constants;
 using Application.Services.Security;
 using BankingSystemCore.Application.Pipelines.Authorization;
@@ -10,6 +11,7 @@ using MediatR;
 
 namespace Application.Features.CorporateCustomers.Commands.Update;
 
+[Audit("Customer.Corporate.Update", "CorporateCustomer")]
 public class UpdateCorporateCustomerCommand : IRequest<UpdatedCorporateCustomerResponse>, ISecuredRequest
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.StaffAndCustomer;

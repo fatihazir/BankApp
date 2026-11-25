@@ -19,6 +19,8 @@ public abstract class ExceptionHandler
 
     public abstract Task HandleException(ConflictException exception);
 
+    public abstract Task HandleException(TooManyRequestsException exception);
+
     /// <summary>Fallback for every exception type that has no dedicated handler.</summary>
     public abstract Task HandleException(Exception exception);
 }

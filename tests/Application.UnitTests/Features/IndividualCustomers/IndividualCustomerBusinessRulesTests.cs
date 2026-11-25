@@ -3,6 +3,7 @@ using Application.Features.IndividualCustomers.Rules;
 using Application.Services.Repositories;
 using BankingSystemCore.CrossCuttingConcerns.Exceptions.Types;
 using Domain.Entities;
+using Application.UnitTests.Support;
 using NSubstitute;
 
 namespace Application.UnitTests.Features.IndividualCustomers;
@@ -10,11 +11,12 @@ namespace Application.UnitTests.Features.IndividualCustomers;
 public class IndividualCustomerBusinessRulesTests
 {
     private readonly IIndividualCustomerRepository _repository = Substitute.For<IIndividualCustomerRepository>();
+    private readonly TestClock _clock = new(); // 2026-11-15
     private readonly IndividualCustomerBusinessRules _rules;
 
     public IndividualCustomerBusinessRulesTests()
     {
-        _rules = new IndividualCustomerBusinessRules(_repository);
+        _rules = new IndividualCustomerBusinessRules(_repository, _clock);
     }
 
     [Fact]
@@ -53,15 +55,24 @@ public class IndividualCustomerBusinessRulesTests
     [Fact]
     public void CustomerMustBeAdult_Accepts_ExactlyEighteen()
     {
-        DateOnly today = DateOnly.FromDateTime(DateTime.UtcNow);
-        Should.NotThrow(() => _rules.CustomerMustBeAdult(today.AddYears(-18)));
+        Should.NotThrow(() => _rules.CustomerMustBeAdult(new DateOnly(2008, 11, 15)));
     }
 
     [Fact]
     public void CustomerMustBeAdult_Rejects_OneDayBeforeEighteen()
     {
-        DateOnly today = DateOnly.FromDateTime(DateTime.UtcNow);
-        Should.Throw<BusinessException>(() => _rules.CustomerMustBeAdult(today.AddYears(-18).AddDays(1)));
+        Should.Throw<BusinessException>(() => _rules.CustomerMustBeAdult(new DateOnly(2008, 11, 16)));
+    }
+
+    [Fact]
+    public void CustomerMustBeAdult_FollowsTheClock()
+    {
+        var bornOnTheSixteenth = new DateOnly(2008, 11, 16);
+        Should.Throw<BusinessException>(() => _rules.CustomerMustBeAdult(bornOnTheSixteenth));
+
+        _clock.Advance(TimeSpan.FromDays(1)); // the 18th birthday has come
+
+        Should.NotThrow(() => _rules.CustomerMustBeAdult(bornOnTheSixteenth));
     }
 
     [Fact]

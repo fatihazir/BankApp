@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using Application.Features.LoanSubTypes.Commands.Create;
 using Application.Features.LoanTypes.Commands.Create;
 using Application.Features.LoanTypes.Queries.GetList;
@@ -10,7 +11,8 @@ namespace WebApi.Controllers;
 
 [ApiController]
 [Authorize]
-[Route("api/loan-types")]
+[ApiVersion("0")]
+[Route("api/v{version:apiVersion}/loan-types")]
 public class LoanTypesController : ControllerBase
 {
     private readonly IMediator _mediator;

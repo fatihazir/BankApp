@@ -1,3 +1,4 @@
+using BankingSystemCore.Application.Pipelines.Auditing;
 using Application.Services.Security;
 using BankingSystemCore.Application.Pipelines.Authorization;
 using Application.Features.LoanApplications.Constants;
@@ -10,9 +11,12 @@ using MediatR;
 
 namespace Application.Features.LoanApplications.Commands.Cancel;
 
-public class CancelLoanApplicationCommand : IRequest<LoanApplicationStatusResponse>, ISecuredRequest
+[Audit("LoanApplication.Cancel", "LoanApplication")]
+public class CancelLoanApplicationCommand : IRequest<LoanApplicationStatusResponse>, ISecuredRequest, IAuditDetail
 {
     IReadOnlyCollection<string> ISecuredRequest.Roles => BankRoles.StaffAndCustomer;
+
+    string? IAuditDetail.AuditDetail => Reason;
 
     public Guid Id { get; set; }
     public string? Reason { get; set; }
@@ -23,13 +27,15 @@ public class CancelLoanApplicationCommandHandler : IRequestHandler<CancelLoanApp
     private readonly ILoanApplicationRepository _applications;
     private readonly LoanApplicationBusinessRules _rules;
     private readonly CustomerAccessPolicy _access;
+    private readonly TimeProvider _time;
 
     public CancelLoanApplicationCommandHandler(
-        ILoanApplicationRepository applications, LoanApplicationBusinessRules rules, CustomerAccessPolicy access)
+        ILoanApplicationRepository applications, LoanApplicationBusinessRules rules, CustomerAccessPolicy access, TimeProvider time)
     {
         _applications = applications;
         _rules = rules;
         _access = access;
+        _time = time;
     }
 
     public async Task<LoanApplicationStatusResponse> Handle(
@@ -43,7 +49,7 @@ public class CancelLoanApplicationCommandHandler : IRequestHandler<CancelLoanApp
         _rules.StatusMustBe(application!, LoanApplicationStatus.Submitted, LoanApplicationStatus.UnderReview);
 
         application!.Status = LoanApplicationStatus.Cancelled;
-        application.DecisionDate = DateTime.UtcNow;
+        application.DecisionDate = _time.GetUtcNow().UtcDateTime;
         application.DecisionReason = request.Reason;
 
         await _applications.UpdateAsync(application!, cancellationToken);

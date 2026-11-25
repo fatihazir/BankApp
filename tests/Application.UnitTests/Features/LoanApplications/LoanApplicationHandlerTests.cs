@@ -20,6 +20,7 @@ public class LoanApplicationHandlerTests
     private readonly ILoanSubTypeRepository _subTypes = Substitute.For<ILoanSubTypeRepository>();
     private readonly ILoanApplicationRepository _applications = Substitute.For<ILoanApplicationRepository>();
     private readonly LoanApplicationBusinessRules _rules;
+    private readonly TestClock _clock = new();
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -64,7 +65,7 @@ public class LoanApplicationHandlerTests
     };
 
     private CreateLoanApplicationCommandHandler CreateHandler(FakeCurrentUser? user = null) =>
-        new(_customers, _subTypes, _applications, _rules, (user ?? FakeCurrentUser.Staff()).Policy());
+        new(_customers, _subTypes, _applications, _rules, (user ?? FakeCurrentUser.Staff()).Policy(), _clock);
 
     private static CreateLoanApplicationCommand Command(decimal amount = 20_000, int term = 24) => new()
     {
@@ -91,6 +92,19 @@ public class LoanApplicationHandlerTests
                                          && a.TermInMonths == 24
                                          && a.ApplicationNumber.StartsWith("LA-")),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Create_TheApplicationNumber_CarriesTheDateOfTheClock()
+    {
+        CustomerIs(new IndividualCustomer { IsActive = true });
+        SubTypeIs(PersonalLoan());
+
+        var response = await CreateHandler().Handle(Command(), Ct);
+        response.ApplicationNumber.ShouldStartWith("LA-20261115-");
+
+        _clock.Advance(TimeSpan.FromDays(1));
+        (await CreateHandler().Handle(Command(), Ct)).ApplicationNumber.ShouldStartWith("LA-20261116-");
     }
 
     [Fact]
@@ -208,7 +222,7 @@ public class LoanApplicationHandlerTests
     public async Task Approve_UnderReview_RecordsTheDecision()
     {
         ApplicationIs(ApplicationIn(LoanApplicationStatus.UnderReview));
-        var handler = new ApproveLoanApplicationCommandHandler(_applications, _rules);
+        var handler = new ApproveLoanApplicationCommandHandler(_applications, _rules, _clock);
 
         var response = await handler.Handle(
             new ApproveLoanApplicationCommand { Id = Guid.NewGuid(), ApprovedAmount = 40_000, Reason = "Good profile" }, Ct);
@@ -216,14 +230,14 @@ public class LoanApplicationHandlerTests
         response.Status.ShouldBe(LoanApplicationStatus.Approved);
         response.ApprovedAmount.ShouldBe(40_000);
         response.DecisionReason.ShouldBe("Good profile");
-        response.DecisionDate.ShouldNotBeNull();
+        response.DecisionDate.ShouldBe(_clock.Now.UtcDateTime); // the decision is stamped by the injected clock
     }
 
     [Fact]
     public async Task Approve_BeforeReview_IsRejected()
     {
         ApplicationIs(ApplicationIn(LoanApplicationStatus.Submitted));
-        var handler = new ApproveLoanApplicationCommandHandler(_applications, _rules);
+        var handler = new ApproveLoanApplicationCommandHandler(_applications, _rules, _clock);
 
         await Should.ThrowAsync<BusinessException>(
             () => handler.Handle(new ApproveLoanApplicationCommand { Id = Guid.NewGuid(), ApprovedAmount = 10_000 }, Ct));
@@ -233,7 +247,7 @@ public class LoanApplicationHandlerTests
     public async Task Approve_MoreThanRequested_IsRejected()
     {
         ApplicationIs(ApplicationIn(LoanApplicationStatus.UnderReview));
-        var handler = new ApproveLoanApplicationCommandHandler(_applications, _rules);
+        var handler = new ApproveLoanApplicationCommandHandler(_applications, _rules, _clock);
 
         await Should.ThrowAsync<BusinessException>(
             () => handler.Handle(new ApproveLoanApplicationCommand { Id = Guid.NewGuid(), ApprovedAmount = 50_000.01m }, Ct));
@@ -249,13 +263,13 @@ public class LoanApplicationHandlerTests
     public async Task Reject_OpenApplication_RecordsTheReason(LoanApplicationStatus status)
     {
         ApplicationIs(ApplicationIn(status));
-        var handler = new RejectLoanApplicationCommandHandler(_applications, _rules);
+        var handler = new RejectLoanApplicationCommandHandler(_applications, _rules, _clock);
 
         var response = await handler.Handle(new RejectLoanApplicationCommand { Id = Guid.NewGuid(), Reason = "Too risky" }, Ct);
 
         response.Status.ShouldBe(LoanApplicationStatus.Rejected);
         response.DecisionReason.ShouldBe("Too risky");
-        response.DecisionDate.ShouldNotBeNull();
+        response.DecisionDate.ShouldBe(_clock.Now.UtcDateTime); // the decision is stamped by the injected clock
         response.ApprovedAmount.ShouldBeNull();
     }
 
@@ -263,7 +277,7 @@ public class LoanApplicationHandlerTests
     public async Task Reject_AlreadyApproved_IsRejected()
     {
         ApplicationIs(ApplicationIn(LoanApplicationStatus.Approved));
-        var handler = new RejectLoanApplicationCommandHandler(_applications, _rules);
+        var handler = new RejectLoanApplicationCommandHandler(_applications, _rules, _clock);
 
         await Should.ThrowAsync<BusinessException>(
             () => handler.Handle(new RejectLoanApplicationCommand { Id = Guid.NewGuid(), Reason = "x" }, Ct));
@@ -277,7 +291,7 @@ public class LoanApplicationHandlerTests
     public async Task Cancel_OpenApplication_IsCancelled(LoanApplicationStatus status)
     {
         ApplicationIs(ApplicationIn(status));
-        var handler = new CancelLoanApplicationCommandHandler(_applications, _rules, FakeCurrentUser.Staff().Policy());
+        var handler = new CancelLoanApplicationCommandHandler(_applications, _rules, FakeCurrentUser.Staff().Policy(), _clock);
 
         var response = await handler.Handle(new CancelLoanApplicationCommand { Id = Guid.NewGuid() }, Ct);
 
@@ -291,7 +305,7 @@ public class LoanApplicationHandlerTests
     public async Task Cancel_ClosedApplication_IsRejected(LoanApplicationStatus status)
     {
         ApplicationIs(ApplicationIn(status));
-        var handler = new CancelLoanApplicationCommandHandler(_applications, _rules, FakeCurrentUser.Staff().Policy());
+        var handler = new CancelLoanApplicationCommandHandler(_applications, _rules, FakeCurrentUser.Staff().Policy(), _clock);
 
         await Should.ThrowAsync<BusinessException>(
             () => handler.Handle(new CancelLoanApplicationCommand { Id = Guid.NewGuid() }, Ct));
@@ -303,8 +317,8 @@ public class LoanApplicationHandlerTests
         ApplicationIs(null);
 
         await Should.ThrowAsync<NotFoundException>(() =>
-            new CancelLoanApplicationCommandHandler(_applications, _rules, FakeCurrentUser.Staff().Policy()).Handle(new CancelLoanApplicationCommand { Id = Guid.NewGuid() }, Ct));
+            new CancelLoanApplicationCommandHandler(_applications, _rules, FakeCurrentUser.Staff().Policy(), _clock).Handle(new CancelLoanApplicationCommand { Id = Guid.NewGuid() }, Ct));
         await Should.ThrowAsync<NotFoundException>(() =>
-            new ApproveLoanApplicationCommandHandler(_applications, _rules).Handle(new ApproveLoanApplicationCommand { Id = Guid.NewGuid(), ApprovedAmount = 1 }, Ct));
+            new ApproveLoanApplicationCommandHandler(_applications, _rules, _clock).Handle(new ApproveLoanApplicationCommand { Id = Guid.NewGuid(), ApprovedAmount = 1 }, Ct));
     }
 }

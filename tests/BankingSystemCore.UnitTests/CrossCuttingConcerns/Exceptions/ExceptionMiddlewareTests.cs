@@ -2,6 +2,7 @@ using System.Text.Json;
 using BankingSystemCore.CrossCuttingConcerns.Exceptions.Middlewares;
 using BankingSystemCore.CrossCuttingConcerns.Exceptions.Types;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace BankingSystemCore.UnitTests.CrossCuttingConcerns.Exceptions;
@@ -10,9 +11,17 @@ public class ExceptionMiddlewareTests
 {
     private sealed record Result(int Status, string? ContentType, JsonElement Body);
 
-    private static async Task<Result> Run(RequestDelegate next, string path = "/api/customers")
+    private sealed class FakeDetector(bool answer) : BankingSystemCore.Repositories.IUniqueViolationDetector
+    {
+        public bool IsUniqueViolation(Microsoft.EntityFrameworkCore.DbUpdateException exception) => answer;
+    }
+
+    private static async Task<Result> Run(RequestDelegate next, string path = "/api/customers", bool? uniqueViolation = null)
     {
         var context = new DefaultHttpContext();
+        if (uniqueViolation is { } answer)
+            context.RequestServices = new ServiceCollection()
+                .AddSingleton<BankingSystemCore.Repositories.IUniqueViolationDetector>(new FakeDetector(answer)).BuildServiceProvider();
         context.Request.Path = path;
         context.Response.Body = new MemoryStream();
 
@@ -110,6 +119,42 @@ public class ExceptionMiddlewareTests
         result.Body.GetProperty("type").GetString().ShouldBe("urn:problem:conflict");
         result.Body.GetRawText().ShouldNotContain("Users");
         result.Body.GetRawText().ShouldNotContain("row(s)");
+    }
+
+    [Fact]
+    public async Task ADuplicateOfAUniqueValue_Returns409_WithoutLeakingTheIndexOrTheValue()
+    {
+        var result = await Run(
+            _ => throw new Microsoft.EntityFrameworkCore.DbUpdateException(
+                "Cannot insert duplicate key row in object 'dbo.Users' with unique index 'IX_Users_Email'. The duplicate key value is (a@b.com)."),
+            uniqueViolation: true);
+
+        result.Status.ShouldBe(409);
+        result.Body.GetProperty("type").GetString().ShouldBe("urn:problem:conflict");
+        result.Body.GetRawText().ShouldNotContain("IX_Users_Email");
+        result.Body.GetRawText().ShouldNotContain("a@b.com");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(null)] // no detector registered at all
+    public async Task AnyOtherDatabaseError_StaysA500(bool? uniqueViolation)
+    {
+        var result = await Run(_ => throw new Microsoft.EntityFrameworkCore.DbUpdateException("String or binary data would be truncated."),
+            uniqueViolation: uniqueViolation);
+
+        result.Status.ShouldBe(500);
+        result.Body.GetProperty("type").GetString().ShouldBe("urn:problem:internal-server-error");
+    }
+
+    [Fact]
+    public async Task TooManyRequestsException_Returns429()
+    {
+        var result = await Run(_ => throw new TooManyRequestsException("Slow down."));
+
+        result.Status.ShouldBe(429);
+        result.Body.GetProperty("type").GetString().ShouldBe("urn:problem:rate-limit");
+        result.Body.GetProperty("detail").GetString().ShouldBe("Slow down.");
     }
 
     [Fact]

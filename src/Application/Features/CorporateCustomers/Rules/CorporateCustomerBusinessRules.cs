@@ -8,10 +8,12 @@ namespace Application.Features.CorporateCustomers.Rules;
 public class CorporateCustomerBusinessRules
 {
     private readonly ICorporateCustomerRepository _repository;
+    private readonly TimeProvider _time;
 
-    public CorporateCustomerBusinessRules(ICorporateCustomerRepository repository)
+    public CorporateCustomerBusinessRules(ICorporateCustomerRepository repository, TimeProvider time)
     {
         _repository = repository;
+        _time = time;
     }
 
     public void CustomerShouldExist(CorporateCustomer? customer)
@@ -40,7 +42,7 @@ public class CorporateCustomerBusinessRules
 
     public void FoundationDateCannotBeInFuture(DateOnly foundationDate)
     {
-        if (foundationDate > DateOnly.FromDateTime(DateTime.UtcNow))
+        if (foundationDate > DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime))
             throw new BusinessException(CorporateCustomersMessages.FoundationDateInFuture);
     }
 }

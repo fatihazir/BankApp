@@ -15,7 +15,7 @@ public class EmailVerificationOptions
 
     /// <summary>
     /// Link put into the e-mail. <c>{email}</c> and <c>{token}</c> are replaced. Point it at the page of the
-    /// front-end that calls <c>POST /api/auth/verify-email</c>.
+    /// front-end that calls <c>POST /api/v0/auth/verify-email</c>.
     /// </summary>
     public string LinkTemplate { get; set; } = "http://localhost:5043/verify-email?email={email}&token={token}";
 }

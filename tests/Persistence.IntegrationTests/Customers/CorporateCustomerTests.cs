@@ -22,7 +22,7 @@ public class CorporateCustomerTests(SqlServerFixture database) : IntegrationTest
         IsActive = true,
         CompanyName = "Acme Holding",
         TaxNumber = TestData.TaxNumber(taxSeed),
-        TaxOffice = "Kadikoy",
+        TaxOffice = "Central Tax Office",
         FoundationDate = new DateOnly(2010, 5, 1),
         EmployeeCount = 60,
         AnnualRevenue = 1m,

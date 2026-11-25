@@ -114,7 +114,7 @@ public static class OpenApiExamples
         var example = new JsonObject
         {
             ["phoneNumber"] = "5551112233",
-            ["address"] = "Atatürk Cad. No:1 Kadıköy",
+            ["address"] = "1 Main Street, Central District",
             ["city"] = "Istanbul",
             ["country"] = "Turkey",
             ["postalCode"] = "34710",
@@ -123,7 +123,7 @@ public static class OpenApiExamples
             // Checksum-valid sample national ID.
             ["nationalId"] = "10000000146",
             ["dateOfBirth"] = "1990-01-15",
-            ["motherName"] = "Ayşe",
+            ["motherName"] = "Mary",
             ["employmentStatus"] = "Employed",
             ["occupation"] = "Software Engineer",
             ["employerName"] = "Acme Technology",
@@ -149,13 +149,13 @@ public static class OpenApiExamples
         var example = new JsonObject
         {
             ["phoneNumber"] = "2125551234",
-            ["address"] = "Büyükdere Cad. No:100 Şişli",
+            ["address"] = "100 Market Avenue, Business District",
             ["city"] = "Istanbul",
             ["country"] = "Turkey",
             ["postalCode"] = "34394",
-            ["companyName"] = "Acme Teknoloji A.Ş.",
+            ["companyName"] = "Acme Technology Inc.",
             ["taxNumber"] = "1234567890",
-            ["taxOffice"] = "Mecidiyeköy",
+            ["taxOffice"] = "Central Tax Office",
             ["tradeRegistryNumber"] = "123456",
             ["foundationDate"] = "2010-05-01",
             ["sector"] = "Software",

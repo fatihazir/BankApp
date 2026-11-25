@@ -22,9 +22,9 @@ public class CorporateCustomersControllerTests(SqlServerFixture database) : ApiT
         Address = "Plaza 1",
         City = "Istanbul",
         Country = "Turkey",
-        CompanyName = "Acme Teknoloji",
+        CompanyName = "Acme Technology",
         TaxNumber = taxNumber,
-        TaxOffice = "Mecidiyekoy",
+        TaxOffice = "Central Tax Office",
         FoundationDate = new DateOnly(2010, 5, 1),
         EmployeeCount = 50,
         AnnualRevenue = 12_500_000.75m,
@@ -58,7 +58,7 @@ public class CorporateCustomersControllerTests(SqlServerFixture database) : ApiT
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var json = await ReadJsonAsync(response);
-        json.GetProperty("companyName").GetString().ShouldBe("Acme Teknoloji");
+        json.GetProperty("companyName").GetString().ShouldBe("Acme Technology");
         json.GetProperty("foundationDate").GetString().ShouldBe("2010-05-01");
         json.GetProperty("annualRevenue").GetDecimal().ShouldBe(12_500_000.75m);
     }
@@ -96,7 +96,7 @@ public class CorporateCustomersControllerTests(SqlServerFixture database) : ApiT
         {
             Id = Guid.NewGuid(), // ignored: the route id is used
             PhoneNumber = "2125551234", Address = "Plaza 2", City = "Izmir", Country = "Turkey",
-            IsActive = true, CompanyName = "Acme Holding", TaxNumber = "1234567890", TaxOffice = "Mecidiyekoy",
+            IsActive = true, CompanyName = "Acme Holding", TaxNumber = "1234567890", TaxOffice = "Central Tax Office",
             FoundationDate = new DateOnly(2010, 5, 1), EmployeeCount = 60, AnnualRevenue = 1m, AuthorizedPersonName = "Jane Doe"
         };
 

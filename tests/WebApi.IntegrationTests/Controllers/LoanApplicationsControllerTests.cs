@@ -37,7 +37,7 @@ public class LoanApplicationsControllerTests(SqlServerFixture database) : ApiTes
         var response = await PostAsync("/api/v0/corporate-customers", new CreateCorporateCustomerCommand
         {
             Email = "company@bank.test", Password = CustomerPassword, PhoneNumber = "2125551234", Address = "Plaza", City = "Istanbul", Country = "Turkey",
-            CompanyName = "Acme", TaxNumber = "1234567890", TaxOffice = "Kadikoy", FoundationDate = new DateOnly(2010, 1, 1),
+            CompanyName = "Acme", TaxNumber = "1234567890", TaxOffice = "Central Tax Office", FoundationDate = new DateOnly(2010, 1, 1),
             EmployeeCount = 10, AnnualRevenue = 1_000_000, AuthorizedPersonName = "Boss"
         });
         response.StatusCode.ShouldBe(HttpStatusCode.Created);

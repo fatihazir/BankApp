@@ -470,7 +470,7 @@ public class AuthenticationAndAuthorizationTests(SqlServerFixture database) : Ap
         var response = await PostAsync("/api/v0/corporate-customers", new CreateCorporateCustomerCommand
         {
             Email = "acme@bank.test", Password = CustomerPassword, PhoneNumber = "2125551234", Address = "Plaza", City = "Istanbul",
-            Country = "Turkey", CompanyName = "Acme", TaxNumber = "1234567890", TaxOffice = "Kadikoy",
+            Country = "Turkey", CompanyName = "Acme", TaxNumber = "1234567890", TaxOffice = "Central Tax Office",
             FoundationDate = new DateOnly(2010, 1, 1), AuthorizedPersonName = "Boss"
         });
         Guid companyId = (await ReadJsonAsync(response)).GetProperty("id").GetGuid();

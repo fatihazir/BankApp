@@ -1,4 +1,4 @@
-# BankApp – Loan Module
+# ExampleBankApp – Loan Module
 
 .NET 10 · C# · Clean Architecture · CQRS (MediatR) · EF Core 10 / SQL Server · JWT + server-side sessions.
 

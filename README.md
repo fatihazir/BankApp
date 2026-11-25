@@ -263,19 +263,19 @@ Rule: a behavior is asserted at the lowest level that can prove it. Database tes
 ./scripts/dotnet.sh test --project tests/Application.UnitTests   # no Docker socket needed
 ```
 
-### CI
+### CI/CD
 
-`.github/workflows/ci.yml` runs on every pull request into `main`, on `ubuntu-latest`: restore, build (Release) and the whole test suite (`dotnet test --solution BankApp.slnx`). The integration tests start SQL Server through Testcontainers, which works on the GitHub runner because Docker is preinstalled. The SDK version comes from `global.json`. A new push to the same pull request cancels the run in progress.
+`.github/workflows/ci.yml`, on `ubuntu-latest`. On every pull request into `main`: restore, Release build, the whole test suite (`dotnet test --solution BankApp.slnx`; the integration tests start SQL Server through Testcontainers, Docker is preinstalled on the runner), then a Docker image build with a smoke test of `/health/live`. After a merge to `main` the image is also pushed to `ghcr.io`. There is no deploy step yet. A new push to the same pull request cancels the run in progress; the SDK version comes from `global.json`.
 
-To block merging on a red build, add a branch protection rule for `main` (Settings → Branches) that requires a pull request and the `build-and-test` status check. There is no deploy step yet.
+To block merging on a red build, protect `main` (Settings → Branches): require a pull request and the `build-and-test` and `docker-build` checks. Details and open items: [docs/CICD.md](docs/CICD.md).
 
 ## 9. Repository layout
 
 ```
-BankApp.slnx · docker-compose.yml · global.json
+BankApp.slnx · Dockerfile · docker-compose.yml · global.json
 .github/   workflows/ci.yml
 scripts/   dotnet.sh  ef.sh  test.sh
-docs/      PROJECT_BOOTSTRAP.md
+docs/      PROJECT_BOOTSTRAP.md  CICD.md
 src/       BankingSystemCore  Domain  Application  Persistence  WebApi
 tests/     BankingSystemCore.UnitTests  Application.UnitTests
            Persistence.IntegrationTests  WebApi.IntegrationTests

@@ -1,9 +1,13 @@
-name: CI
+name: CI/CD
 
-# Runs on every pull request into main: build the solution and run the whole test suite.
-# Make the "build-and-test" check required in the branch protection rules so a red build blocks the merge.
+# Pull request into main  -> verify only (CI).
+# Merge / push to main    -> verify, then publish the image (CD).
+# Make "build-and-test" and "docker-build" required in the branch protection rules of main,
+# so a red check blocks the merge.
 on:
   pull_request:
+    branches: [main]
+  push:
     branches: [main]
 
 permissions:
@@ -15,6 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 1) Build and test. Runs on pull requests and on main.
   build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -32,3 +37,56 @@ jobs:
       # Unit tests plus integration tests. The integration tests start a throwaway SQL Server
       # container with Testcontainers; Docker is preinstalled on ubuntu-latest.
       - run: dotnet test --solution BankApp.slnx --no-build -c Release
+
+  # 2) Does the Dockerfile really build, and does the container start? Caught on the PR, not after the merge.
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t bankapp-api:ci .
+      - name: Container smoke test
+        # Only the "live" endpoint: it needs no database. The values are throwaway, for this test only.
+        run: |
+          docker run -d --name smoke -p 8080:8080 \
+            -e Security__Jwt__SecurityKey=ci-smoke-test-signing-key-0123456789-abcdef \
+            -e "ConnectionStrings__BankAppDb=Server=localhost;Database=smoke;User Id=sa;Password=smoke;TrustServerCertificate=True" \
+            bankapp-api:ci
+          for i in $(seq 1 20); do
+            curl -fsS http://localhost:8080/health/live && exit 0
+            sleep 1
+          done
+          docker logs smoke
+          exit 1
+
+  # 3) ONLY on a merge to main: push the image to the GitHub Container Registry (ghcr.io).
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build-and-test, docker-build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}   # given by GitHub automatically, nothing to add
+      # Registry names must be lowercase; the repository name (BankApp) is not. This action lowercases it.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long,prefix=
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+
+  # 4) DEPLOY comes here once a hosting target is chosen (see docs/CICD.md).

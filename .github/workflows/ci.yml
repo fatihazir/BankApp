@@ -1,0 +1,34 @@
+name: CI
+
+# Runs on every pull request into main: build the solution and run the whole test suite.
+# Make the "build-and-test" check required in the branch protection rules so a red build blocks the merge.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A new push to the same pull request cancels the run that is still going.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # The SDK version comes from global.json, so CI and local builds use the same one.
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - run: dotnet restore BankApp.slnx
+      - run: dotnet build BankApp.slnx --no-restore -c Release
+
+      # Unit tests plus integration tests. The integration tests start a throwaway SQL Server
+      # container with Testcontainers; Docker is preinstalled on ubuntu-latest.
+      - run: dotnet test --solution BankApp.slnx --no-build -c Release

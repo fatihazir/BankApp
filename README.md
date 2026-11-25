@@ -263,10 +263,17 @@ Rule: a behavior is asserted at the lowest level that can prove it. Database tes
 ./scripts/dotnet.sh test --project tests/Application.UnitTests   # no Docker socket needed
 ```
 
+### CI
+
+`.github/workflows/ci.yml` runs on every pull request into `main`, on `ubuntu-latest`: restore, build (Release) and the whole test suite (`dotnet test --solution BankApp.slnx`). The integration tests start SQL Server through Testcontainers, which works on the GitHub runner because Docker is preinstalled. The SDK version comes from `global.json`. A new push to the same pull request cancels the run in progress.
+
+To block merging on a red build, add a branch protection rule for `main` (Settings → Branches) that requires a pull request and the `build-and-test` status check. There is no deploy step yet.
+
 ## 9. Repository layout
 
 ```
 BankApp.slnx · docker-compose.yml · global.json
+.github/   workflows/ci.yml
 scripts/   dotnet.sh  ef.sh  test.sh
 docs/      PROJECT_BOOTSTRAP.md
 src/       BankingSystemCore  Domain  Application  Persistence  WebApi
